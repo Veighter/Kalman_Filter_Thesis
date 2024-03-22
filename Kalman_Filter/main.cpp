@@ -15,19 +15,15 @@ constexpr int IMU_DATA_ROWS = 8851;
 constexpr int GPS_DATA_ROWS = 872;
 
 // Was ist mit den GPS Daten, wie lege ich die an??
-
-struct Coordinates {
-    double x{};
-    double y{};
-    double z{};
-};
-
 struct IMU_Data {
     Eigen::Vector3d accelMeas{};
     Eigen::Vector3d magMeas{};
     Eigen::Vector3d gyroMeas{};
 };
 
+/// <summary>
+/// Calibration Params for one Sensor Model
+/// </summary>
 struct Calibration_Params {
     Eigen::Vector3d bias{};
     Eigen::Matrix3d theta{};
@@ -55,8 +51,8 @@ struct IMU_Calibration {
 struct INS
 {
     int imu_port{}; // connect port on the multiplexer
-    Coordinates coord{}; // coordinats in mm
-
+    Eigen::Vector3d coords{}; // coordinats in mm
+    Eigen::Quaternion<float> quat{};
     // IMU Data delivered
     std::vector<double> timeData{ std::vector<double>(IMU_DATA_ROWS) };
     std::vector<IMU_Data> imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
@@ -130,7 +126,7 @@ void get_calibrated_meas(INS& ins) {
 int main()
 {   
     // Flag fuer die Estimation Fusion
-    constexpr bool estiation_fusion = false;
+    constexpr bool estimation_fusion = false;
 
     // read in of datafiles with the coloum structure:
     // Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
@@ -139,6 +135,8 @@ int main()
 
     // Define INS1
     ins_1.imu_port = 0;
+    ins_1.coords << 6.7441, 1.5375, 53.0125;
+    ins_1.quat << -0.398 , 0.444 ,- 0.769 , 0.23;
     ins_1.calib.accelCali.bias << -4.31342161, -22.0591438, 29.0506018;
     ins_1.calib.accelCali.theta << 0.997624911, 0.00501776681, 0.0211610225, -0.00811466326, 0.986648117, 0.136514105, -0.0214393877, -0.138505947, 0.985038735;
     ins_1.calib.magCali.bias << -21.155646, 15.08731, 60.443188;
@@ -148,6 +146,8 @@ int main()
 
     // Define INS2
     ins_2.imu_port = 1;
+    ins_2.coords << 1.6521 ,- 75.4449 ,- 54.5905;
+    ins_2.quat << -0.23,0.119,0.444, 0.858;
     ins_2.calib.accelCali.bias << -3.1927911, -19.8014002, 5.25052353;
     ins_2.calib.accelCali.theta << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592;
     ins_2.calib.magCali.bias << 6.847327, -22.258473, 54.19993;
@@ -158,6 +158,8 @@ int main()
 
     // Define INS3
     ins_3.imu_port = 6;
+    ins_3.coords << -76.5838, 1.5375, 53.0125;
+    ins_3.quat << -0.23, 0.769, 0.444, - 0.398;
     ins_3.calib.accelCali.bias << -3.00372421, -8.129569, 16.655453;
     ins_3.calib.accelCali.theta << 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779;
     ins_3.calib.magCali.bias << -13.293332, -8.99686, 0.35697;
@@ -168,6 +170,8 @@ int main()
 
     // Define INS4
     ins_4.imu_port = 7;
+    ins_4.coords << 1.6521, 75.3151, -54.5905;
+    ins_4.quat << -0.23, - 0.119, - 0.444, 0.858;
     ins_4.calib.accelCali.bias << 0.513195483, -6.38354307, 18.6818155;
     ins_4.calib.accelCali.theta << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184;
     ins_4.calib.magCali.bias << 6.961981, -44.798494, 36.018804;
@@ -183,17 +187,10 @@ int main()
     inss[2] = &ins_3;
     inss[3] = &ins_4;
 
-    std::cout << &ins_1 << " " << inss[0];
-
-
-
     int coloumn = 0; // Index for the array of values
     int row = 0;
     size_t pos = 0; // position of the delimiter in string
-    std::string data{};
-    std::string delimiter{};
-    std::string path_ending{};
-    
+       
 
     // Einlesen der Messdaten in die IMUs 
     for (INS* ins : inss)
@@ -230,13 +227,13 @@ int main()
         get_calibrated_meas(*ins);
     }
     // Domain Fusion -> Raw Data
-    if (!estiation_fusion) {
+    if (!estimation_fusion) {
         // Transformation in Punkt
         
 
     }
     // Estimation Fusion
-    if (estiation_fusion) {
+    if (estimation_fusion) {
 
     }
     return 0;
