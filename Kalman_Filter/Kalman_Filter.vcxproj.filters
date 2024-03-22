@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\Meas_Data">
+      <UniqueIdentifier>{8015cdd0-70df-4e32-afb6-968116a1062e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="extendedkalmanfilter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="sensors.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="extendedkalmanfilter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fusion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_0\IMU_0_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_1\IMU_1_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_6\IMU_6_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_7\IMU_7_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+  </ItemGroup>
+</Project>
