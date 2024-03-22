@@ -8,19 +8,6 @@ constexpr double INIT_PSI_STD = 45.0 / 180.0 * M_PI;
 constexpr double GPS_POS_STD = 3.0;
 
 
-Eigen::VectorXd ExtendedKalmanFilter::getState()const {
-	return state;
-};
-Eigen::MatrixXd ExtendedKalmanFilter::getCovariance() const {
-	return covariance;
-};
-void ExtendedKalmanFilter::setState(const Eigen::VectorXd& new_state) {
-	state = new_state;
-};
-void ExtendedKalmanFilter::setCovariance(const Eigen::MatrixXd& new_covariance) {
-	covariance = new_covariance;
-};
-
 void ExtendedKalmanFilter::predictionStep(double dt) {
 }
 

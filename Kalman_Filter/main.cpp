@@ -21,22 +21,7 @@ struct IMU_Data {
     Eigen::Vector3d gyroMeas{};
 };
 
-/// <summary>
-/// Calibration Params for one Sensor Model
-/// </summary>
-struct Calibration_Params {
-    Eigen::Vector3d bias{};
-    Eigen::Matrix3d theta{};
-};
 
-/// <summary>
-/// The struct contains all calibrations parameters for the sensors of the used IMU according to their sensor error model
-/// </summary>
-struct IMU_Calibration {
-    Calibration_Params accelCali{};
-    Calibration_Params gyroCali{};
-    Calibration_Params magCali{};
-    };
 
 /// <summary>
 /// The struct INS contains the following members (called INS, because the struct can instanciate an ekf in the second fusion domain (estimation fusion))
@@ -51,14 +36,11 @@ struct IMU_Calibration {
 struct INS
 {
     int imu_port{}; // connect port on the multiplexer
-    Eigen::Vector3d coords{}; // coordinats in mm
-    Eigen::Quaternion<float> quat{};
-    // IMU Data delivered
+        // IMU Data delivered
     std::vector<double> timeData{ std::vector<double>(IMU_DATA_ROWS) };
     std::vector<IMU_Data> imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
     ExtendedKalmanFilter ekf{};
-    IMU_Calibration calib{};
-    // quaternion or rotation matrix for transforming in the reference Frame
+   
 } ins_1, ins_2, ins_3, ins_4;
 
 
@@ -110,21 +92,21 @@ void imu_2_vimu(INS& ins) {
 /// Transforms the measurements of the INS delivered from the IMU given the sensor error Model of the IMU sensors
 /// </summary>
 /// <param name="ins"></param> ins carrying the sensor data which has to be calibrated
-void get_calibrated_meas(INS& ins) {
-    Calibration_Params accel_Params = ins.calib.accelCali;
-    Calibration_Params gyro_params = ins.calib.gyroCali;
-    Calibration_Params mag_params = ins.calib.magCali;
-
-    for (IMU_Data& data : ins.imuData) {
-        data.accelMeas = accel_Params.theta * data.accelMeas - accel_Params.bias;
-        data.gyroMeas = gyro_params.theta * data.gyroMeas - gyro_params.bias;
-        data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
-    }
-
-}
+//void get_calibrated_meas(INS& ins) {
+//    Calibration_Params accel_Params = ins.calib.accelCali;
+//    Calibration_Params gyro_params = ins.calib.gyroCali;
+//    Calibration_Params mag_params = ins.calib.magCali;
+//
+//    for (IMU_Data& data : ins.imuData) {
+//        data.accelMeas = accel_Params.theta * data.accelMeas - accel_Params.bias;
+//        data.gyroMeas = gyro_params.theta * data.gyroMeas - gyro_params.bias;
+//        data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
+//    }
+//
+//}
 
 int main()
-{   
+{
     // Flag fuer die Estimation Fusion
     constexpr bool estimation_fusion = false;
 
@@ -135,49 +117,50 @@ int main()
 
     // Define INS1
     ins_1.imu_port = 0;
-    ins_1.coords << 6.7441, 1.5375, 53.0125;
-    ins_1.quat << -0.398 , 0.444 ,- 0.769 , 0.23;
-    ins_1.calib.accelCali.bias << -4.31342161, -22.0591438, 29.0506018;
-    ins_1.calib.accelCali.theta << 0.997624911, 0.00501776681, 0.0211610225, -0.00811466326, 0.986648117, 0.136514105, -0.0214393877, -0.138505947, 0.985038735;
-    ins_1.calib.magCali.bias << -21.155646, 15.08731, 60.443188;
-    ins_1.calib.magCali.theta << 0.945738, -0.003007, -0.006546, -0.003007, 0.922916, 0.007009, -0.006546, 0.007009, 0.949019;
-    ins_1.calib.gyroCali.bias << 0.01302428, 0.00608158, 0.00806136;
-    ins_1.calib.gyroCali.theta << 0.92552028, -0.03281577, 0.33111104, 0.04988341, 0.88751086, 0.42732689, 0.13176533, -0.15967813, 0.80570043;
+    ins_1.ekf.setCoords(Eigen::Vector3d{ 6.7441, 1.5375, 53.0125 });
+    ins_1.ekf.setOrientation(Eigen::Quaternion<double>{ -0.398, 0.444, -0.769, 0.23 });
+    ins_1.ekf.setAccelBias(Eigen::Vector3d{ -4.31342161, -22.0591438, 29.0506018 });
+    ins_1.ekf.setAccelTransformMatrix((Eigen::Matrix3d()<< 0.997624911, 0.00501776681, 0.0211610225, -0.00811466326, 0.986648117, 0.136514105, -0.0214393877, -0.138505947, 0.985038735).finished());
+    ins_1.ekf.setMagBias(Eigen::Vector3d
+        { -21.155646, 15.08731, 60.443188 });
+    ins_1.ekf.setMagTransformMatrix((Eigen::Matrix3d()<< 0.945738, -0.003007, -0.006546, -0.003007, 0.922916, 0.007009, -0.006546, 0.007009, 0.949019 ).finished());
+    ins_1.ekf.setGyroBias(Eigen::Vector3d{ 0.01302428, 0.00608158, 0.00806136 });
+    ins_1.ekf.setGyroTransformMatrix((Eigen::Matrix3d()<< 0.92552028, -0.03281577, 0.33111104, 0.04988341, 0.88751086, 0.42732689, 0.13176533, -0.15967813, 0.80570043 ).finished());
 
     // Define INS2
     ins_2.imu_port = 1;
-    ins_2.coords << 1.6521 ,- 75.4449 ,- 54.5905;
-    ins_2.quat << -0.23,0.119,0.444, 0.858;
-    ins_2.calib.accelCali.bias << -3.1927911, -19.8014002, 5.25052353;
-    ins_2.calib.accelCali.theta << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592;
-    ins_2.calib.magCali.bias << 6.847327, -22.258473, 54.19993;
-    ins_2.calib.magCali.theta << 1.264232, -0.044928, -0.002404, -0.044928, 1.225985, -0.006535, -0.002404, -0.006535, 1.244639;
-    ins_2.calib.gyroCali.bias << 0.00381464, 0.01862675, 0.00931548;
-    ins_2.calib.gyroCali.theta << 0.91231546, 0.1936244, -0.01587249, -0.04097905, 0.95112852, 0.0414368, -0.01217961, 0.2924943, 0.90286951;
+    ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 ,-75.4449 ,-54.5905 });
+    ins_2.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.119, 0.444, 0.858});
+    ins_2.ekf.setAccelBias(Eigen::Vector3d{ -3.1927911, -19.8014002, 5.25052353 });
+    ins_2.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592).finished());
+    ins_2.ekf.setMagBias(Eigen::Vector3d{ 6.847327, -22.258473, 54.19993 });
+    ins_2.ekf.setMagTransformMatrix((Eigen::Matrix3d()<< 1.264232, -0.044928, -0.002404, -0.044928, 1.225985, -0.006535, -0.002404, -0.006535, 1.244639).finished());
+    ins_2.ekf.setGyroBias(Eigen::Vector3d{ 0.00381464, 0.01862675, 0.00931548 });
+    ins_2.ekf.setGyroTransformMatrix((Eigen::Matrix3d()<< 0.91231546, 0.1936244, -0.01587249, -0.04097905, 0.95112852, 0.0414368, -0.01217961, 0.2924943, 0.90286951).finished());
 
 
     // Define INS3
     ins_3.imu_port = 6;
-    ins_3.coords << -76.5838, 1.5375, 53.0125;
-    ins_3.quat << -0.23, 0.769, 0.444, - 0.398;
-    ins_3.calib.accelCali.bias << -3.00372421, -8.129569, 16.655453;
-    ins_3.calib.accelCali.theta << 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779;
-    ins_3.calib.magCali.bias << -13.293332, -8.99686, 0.35697;
-    ins_3.calib.magCali.theta << 1.225777, 0.032457, 0.029723, 0.032457, 1.188017, -0.026329, 0.029723, -0.026329, 1.139707;
-    ins_3.calib.gyroCali.bias << -0.03347582, 0.05826998, 0.0033403;
-    ins_3.calib.gyroCali.theta << 1.03047692, 0.11318723, 0.05332105, -0.04702399, 0.73067087, -0.11064558, 0.09328256, -0.4519223, 0.57949588;
+    ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838, 1.5375, 53.0125 });
+    ins_3.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398});
+    ins_3.ekf.setAccelBias(Eigen::Vector3d{ -3.00372421, -8.129569, 16.655453 });
+    ins_3.ekf.setAccelTransformMatrix((Eigen::Matrix3d()<< 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779).finished());
+    ins_3.ekf.setMagBias(Eigen::Vector3d{ -13.293332, -8.99686, 0.35697 });
+    ins_3.ekf.setMagTransformMatrix((Eigen::Matrix3d() << 1.225777, 0.032457, 0.029723, 0.032457, 1.188017, -0.026329, 0.029723, -0.026329, 1.139707).finished());
+    ins_3.ekf.setGyroBias(Eigen::Vector3d{ -0.03347582, 0.05826998, 0.0033403 });
+    ins_3.ekf.setGyroTransformMatrix((Eigen::Matrix3d()<< 1.03047692, 0.11318723, 0.05332105, -0.04702399, 0.73067087, -0.11064558, 0.09328256, -0.4519223, 0.57949588).finished());
 
 
     // Define INS4
     ins_4.imu_port = 7;
-    ins_4.coords << 1.6521, 75.3151, -54.5905;
-    ins_4.quat << -0.23, - 0.119, - 0.444, 0.858;
-    ins_4.calib.accelCali.bias << 0.513195483, -6.38354307, 18.6818155;
-    ins_4.calib.accelCali.theta << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184;
-    ins_4.calib.magCali.bias << 6.961981, -44.798494, 36.018804;
-    ins_4.calib.magCali.theta << 0.919869, -0.063969, 0.036467, -0.063969, 1.003396, 0.002549, 0.036467, 0.002549, 1.048945;
-    ins_4.calib.gyroCali.bias << -0.04707186, 0.00766569, 0.00236872;
-    ins_4.calib.gyroCali.theta << 0.93908668, -0.0466796, -0.20330397, -0.13423415, 0.67620875, -0.33500868, 0.08244915, -0.28759273, 0.49361518;
+    ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521, 75.3151, -54.5905 });
+    ins_4.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858});
+    ins_4.ekf.setAccelBias(Eigen::Vector3d{ 0.513195483, -6.38354307, 18.6818155 });
+    ins_4.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184).finished());
+    ins_4.ekf.setMagBias(Eigen::Vector3d{ 6.961981, -44.798494, 36.018804 });
+    ins_4.ekf.setMagTransformMatrix((Eigen::Matrix3d()<< 0.919869, -0.063969, 0.036467, -0.063969, 1.003396, 0.002549, 0.036467, 0.002549, 1.048945).finished());
+    ins_4.ekf.setGyroBias(Eigen::Vector3d{ -0.04707186, 0.00766569, 0.00236872 });
+    ins_4.ekf.setGyroTransformMatrix((Eigen::Matrix3d()<< 0.93908668, -0.0466796, -0.20330397, -0.13423415, 0.67620875, -0.33500868, 0.08244915, -0.28759273, 0.49361518).finished());
 
 
       
@@ -223,9 +206,9 @@ int main()
 
     }
   
-    for (INS* ins : inss) {
+   /* for (INS* ins : inss) {
         get_calibrated_meas(*ins);
-    }
+    }*/
     // Domain Fusion -> Raw Data
     if (!estimation_fusion) {
         // Transformation in Punkt
