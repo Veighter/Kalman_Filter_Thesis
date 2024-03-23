@@ -38,9 +38,12 @@ public:
 	void setGyroTransformMatrix(Eigen::Matrix3d t) { calibration_params.gyroCali.theta = t; }
 	void setMagBias(Eigen::Vector3d b) { calibration_params.magCali.bias = b; }
 	void setMagTransformMatrix(Eigen::Matrix3d t) { calibration_params.magCali.theta = t; }
+	calibration::IMU_Calibration getCalibrationParams() { return calibration_params; }
 
 	void setCoords(Eigen::Vector3d c) { coords = c; }
+	Eigen::Vector3d getCoords() { return coords; }
 	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }
+	Eigen::Quaternion<double> getOrientation() { return orientation; }
 
 
 
