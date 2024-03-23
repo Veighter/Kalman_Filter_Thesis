@@ -24,7 +24,7 @@ namespace calibration {
 
 class ExtendedKalmanFilter {
 public:
-	ExtendedKalmanFilter() :init(false){};
+	ExtendedKalmanFilter() :init(false),calibrated(false){};
 	Eigen::VectorXd getState() const {
 		return state;
 	}
@@ -50,7 +50,7 @@ public:
 	void updateStep(sensorMeas::GPSMeas gpsMeas, double dt);
 
 private:
-	bool init;
+	bool init, calibrated;
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
 
