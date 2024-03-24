@@ -25,6 +25,7 @@ namespace calibration {
 class ExtendedKalmanFilter {
 public:
 	ExtendedKalmanFilter() :init(false),calibrated(false){};
+	bool isInitialised() const { return init; }
 	Eigen::VectorXd getState() const {
 		return state;
 	}
@@ -48,8 +49,8 @@ public:
 
 
 	// Important functions fot the Kalman Filter including pysical Model and Prediction and Update
-	void predictionStep(double dt);
-	void predictionStep(sensorMeas::AccelMeas accMeas, sensorMeas::GyroMeas gyroMeas, sensorMeas::MagMeas magMeas, double dt);
+//	void predictionStep(double dt);
+	void predictionStep(Eigen::Vector3d accMeas, Eigen::Vector3d gyroMeas, Eigen::Vector3d magMeas, double dt);
 	void updateStep(sensorMeas::GPSMeas gpsMeas, double dt);
 
 private:

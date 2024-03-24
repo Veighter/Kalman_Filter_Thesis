@@ -23,7 +23,6 @@ struct IMU_Data {
 };
 
 
-
 /// <summary>
 /// The struct INS contains the following members (called INS, because the struct can instanciate an ekf in the second fusion domain (estimation fusion))
 /// imu_port: connected imu_port of the imu connected to the ins
@@ -204,6 +203,8 @@ int main()
 	cm_INS.inss[1] = &ins_2;
 	cm_INS.inss[2] = &ins_3;
 	cm_INS.inss[3] = &ins_4;
+
+	cm_INS.ekf.setOrientation(Eigen::Quaternion<double>{1, 0, 0, 0});
 
 	int coloumn = 0; // Index for the array of values
 	int row = 0;
