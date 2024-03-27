@@ -43,15 +43,17 @@ public:
 
 	void setCoords(Eigen::Vector3d c) { coords = c; }
 	Eigen::Vector3d getCoords() { return coords; }
-	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }
+	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }// Orientation from IMU to VIMU is static!!
 	Eigen::Quaternion<double> getOrientation() { return orientation; }
 
 
 
 	// Important functions fot the Kalman Filter including pysical Model and Prediction and Update
-//	void predictionStep(double dt);
-	void predictionStep(Eigen::Vector3d accMeas, Eigen::Vector3d gyroMeas, Eigen::Vector3d magMeas, double dt);
-	void updateStep(sensorMeas::GPSMeas gpsMeas, double dt);
+	void predictionStep(double dt);
+	void predictionStep(Eigen::Vector3d accMeas,double dt);
+	void predictionStep(Eigen::Vector3d gyroMeas,double dt);
+	void predictionStep(Eigen::Vector3d magMeas, double dt);
+	void updateStep(Eigen::Vector3d gpsMeas, double dt);
 
 private:
 	bool init, calibrated;
