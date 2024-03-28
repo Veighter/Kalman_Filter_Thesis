@@ -31,34 +31,34 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 		double q_3 = state(15);
 
 
-		// Predict position
-		state(0) = x + dt * x_dot + 1. / 2 * dt * dt * x_dot_dot;
-		state(1) = y + dt * y_dot + 1. / 2 * dt * dt * y_dot_dot;
-		state(2) = z + dt * z_dot + 1. / 2 * dt * dt * z_dot_dot;
+		//// Predict position
+		//state(0) = x + dt * x_dot + 1. / 2 * dt * dt * x_dot_dot;
+		//state(1) = y + dt * y_dot + 1. / 2 * dt * dt * y_dot_dot;
+		//state(2) = z + dt * z_dot + 1. / 2 * dt * dt * z_dot_dot;
 
-		// Predict velocity
-		state(3) = x_dot + dt * x_dot_dot;
-		state(4) = y_dot + dt * y_dot_dot;
-		state(5) = z_dot + dt * z_dot_dot;
+		//// Predict velocity
+		//state(3) = x_dot + dt * x_dot_dot;
+		//state(4) = y_dot + dt * y_dot_dot;
+		//state(5) = z_dot + dt * z_dot_dot;
 
-		// Update Acceleration with measurements
-		state(6) = x_dot_dot;
-		state(7) = y_dot_dot;
-		state(8) = z_dot_dot;
+		//// Update Acceleration with measurements
+		//state(6) = x_dot_dot;
+		//state(7) = y_dot_dot;
+		//state(8) = z_dot_dot;
 
-		// Update Angular velocity
-		state(9) = psi_x_dot;
-		state(10) = psi_y_dot;
-		state(11) = psi_z_dot;
+		//// Update Angular velocity
+		//state(9) = psi_x_dot;
+		//state(10) = psi_y_dot;
+		//state(11) = psi_z_dot;
 
-		// Predict Orientation
-		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ q_0 + 1. / 2 * (-psi_x_dot * q_1 - psi_y_dot * q_2 - psi_z_dot * q_3) * dt, q_1 + 1. / 2 * (psi_x_dot * q_0 + psi_z_dot * q_2 - psi_y_dot * q_3) * dt, q_2 + 1. / 2 * (psi_y_dot * q_0 - psi_z_dot * q_1 + psi_x_dot * q_3) * dt, q_3 + 1. / 2 * (psi_z_dot * q_0 + psi_y_dot * q_1 - psi_x_dot * q_2) * dt
-		};
-		q.normalize();
-		state(12) = q.w();
-		state(13) = q.x();
-		state(14) = q.y();
-		state(15) = q.z();
+		//// Predict Orientation
+		//Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ q_0 + 1. / 2 * (-psi_x_dot * q_1 - psi_y_dot * q_2 - psi_z_dot * q_3) * dt, q_1 + 1. / 2 * (psi_x_dot * q_0 + psi_z_dot * q_2 - psi_y_dot * q_3) * dt, q_2 + 1. / 2 * (psi_y_dot * q_0 - psi_z_dot * q_1 + psi_x_dot * q_3) * dt, q_3 + 1. / 2 * (psi_z_dot * q_0 + psi_y_dot * q_1 - psi_x_dot * q_2) * dt
+		//};
+		//q.normalize();
+		//state(12) = q.w();
+		//state(13) = q.x();
+		//state(14) = q.y();
+		//state(15) = q.z();
 
 
 		// state = x,y,z,x_dot,y_dot,z_dot,x_dot_dot,y_dot_dot,z_dot_dot,psi_x_dot,psi_y_dot,q0,q1,q2,q3,B_x,B_y,B_z
@@ -75,10 +75,19 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 		F.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
 		F.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
 		F.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
-		F.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -1. / 2 * dt * q.x(), -1. / 2 * dt * q.y(), -1. / 2 * dt * q.z(), 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
-		F.row(13) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * q.w(), 1. / 2 * dt * q.y(), -1. / 2 * dt * q.z(), 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
-		F.row(14) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * q.z(), 1. / 2 * dt * q.w(), -1. / 2 * dt * q.x(), 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_x_dot;
-		F.row(15) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -1. / 2 * dt * q.y(), 1. / 2 * dt * q.x(), 1. / 2 * dt * q.w(), 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
+		F.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0,0 , 0, 0, 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
+		F.row(13) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
+		F.row(14) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot,1, 1. / 2 * dt * psi_x_dot;
+		F.row(15) << 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
+
+		state = F * state;
+		
+		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ state(12), state(13), state(14), state(15) };
+		q.normalize();
+		state(12) = q.w();
+		state(13) = q.x();
+		state(14) = q.y();
+		state(15) = q.z();
 
 		setState(state);
 
