@@ -147,7 +147,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		S = H * covariance * H.transpose() + R;
 		K = covariance * H.transpose() * S.inverse();
-	
+
 
 		// Dont update the YAW Component with Accelerometer-Data
 		Eigen::VectorXd state_error = Eigen::VectorXd::Zero(13);
@@ -173,8 +173,15 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 }
 
 // die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
-// Anfagnsorientierung, wie bestimme ich diese, muss ja wissen wo mein NED hinzeigt
-void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt) {
+// Anfagnsorientierung, wie bestimme ich diese, muss ja wissen wo mein NED hinzeigt (Aus Accelerometer und Magnetometerwert grob bestimmen wie 
+// oben in den Update schritten
+
+/// <summary>
+/// Method for the Measurement Update of the navigational Object state with the GPS 
+/// </summary>
+/// <param name="gpsMeas"></param>GPS given in LLA
+/// <param name="dt"></param>
+void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 }) {
 
 	if (!isInitialised()) {
 		Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
@@ -183,22 +190,50 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt) {
 
 		state(0) = gpsMeas(0); // -> Transform to NED Coordinates needed
 		state(1) = gpsMeas(1);
-		state(2) = gpsMeas(2);
-		state(3) = 0;			// velocity
-		state(4) = 0;
-		state(5) = 0;
+		state(2) = 0;
+
+		if (gpsVelocityInitial.size() == 3) {
+			state(3) = gpsVelocityInitial(0);
+			state(4) = gpsVelocityInitial(1);
+			state(5) = gpsVelocityInitial(2);
+		}
+		else {
+			state(3) = 0;
+			state(4) = 0;
+			state(5) = 0;
+		}
+		
 		state(6) = 0;		// acceleration
 		state(7) = 0;
 		state(8) = 0;
-		state(9) = 0;		// orientation
-		state(10) = 0;
-		state(11) = 0;
-		state(12) = 0;
+
+		// orientation
+		if (orientationInitial.norm() > 0) { // >0 reicht, wegen rundungsfehlern kann die Norm auch groesser 1 sein, obwohl das normalisiert uebernommen werden soltle
+			state(9) = orientationInitial.w();
+			state(10) = orientationInitial.x();
+			state(11) = orientationInitial.y();
+			state(12) = orientationInitial.z();
+
+		}
+		else {
+			state(9) = 0;					
+			state(10) = 0;
+			state(11) = 0;
+			state(12) = 0;
+		}
+		
+
+
+
+
+
 		setState(state);
 		setCovariance(covariance);
 	}
 
 }
+
+
 
 
 
