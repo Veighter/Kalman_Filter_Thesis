@@ -14,6 +14,7 @@ using namespace sensorMeas;
 constexpr int IMU_DATA_ROWS = 8851;
 constexpr int GPS_DATA_ROWS = 872;
 constexpr size_t num_IMUs = 4;
+constexpr double g = 9.81;
 
 // Was ist mit den GPS Daten, wie lege ich die an??
 struct IMU_Data {
@@ -236,7 +237,11 @@ int main()
 			iss >> ins->imuData[row].gyroMeas[0] >> ins->imuData[row].gyroMeas[1] >> ins->imuData[row].gyroMeas[2];
 
 			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
-
+			
+			IMU_Data meas = ins->imuData[row];
+			meas.accelMeas = meas.accelMeas * g / 1000.0;
+			meas.gyroMeas = meas.gyroMeas * M_PI / 180.0;
+	
 		}
 		row = 0;
 

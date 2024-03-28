@@ -90,7 +90,7 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 
 // Das was geschaetzt werden soll ist eigentlich nur Position, Geschwindigkeit und Orientierung des zu navigierenden Objekts. 
 // Anpassen des Zustandsvektors ist also von Noeten!!
-void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d accMeas, Eigen::Vector3d gyroMeas, Eigen::Vector3d magMeas, double dt) {
+void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 	
 	if(isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -99,7 +99,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d accMeas, Eigen::Vector
 	}
 }
 
-void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
+void ExtendedKalmanFilter::updateGyro(Eigen::Vector3d gyroMeas, double dt) {
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -108,7 +108,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 	}
 }
 
-void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d magMeas, double dt) {
+void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -119,7 +119,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d magMeas, double dt) {
 
 // die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
 // Anfagnsorientierung, wie bestimme ich diese, muss ja wissen wo mein NED hinzeigt
-void ExtendedKalmanFilter::updateStep(Eigen::Vector3d gpsMeas, double dt) {
+void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt) {
 
 	if (!isInitialised()) {
 		Eigen::VectorXd state = Eigen::VectorXd::Zero(16);
