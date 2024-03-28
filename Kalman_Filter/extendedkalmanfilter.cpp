@@ -7,11 +7,13 @@ constexpr double INIT_VEL_STD = 10.0;
 constexpr double INIT_PSI_STD = 45.0 / 180.0 * M_PI;
 constexpr double GPS_POS_STD = 3.0;
 
+// state = p, p_dot, p_dot_dot, q
 
-void ExtendedKalmanFilter::predictionStep(double dt) {
+// Prediciton Step with implicit Gyro inputs, decreases number of states https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6316172
+void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
-		Eigen::MatrixXd covariance = getCovariance();
+		Eigen::MatrixXd covariance = getCovariance(); // correlates to the gyro and accelerometer data due to orientation and position integration form the sensor data
 
 		double x = state(0);
 		double y = state(1);
@@ -22,13 +24,13 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 		double x_dot_dot = state(6);
 		double y_dot_dot = state(7);
 		double z_dot_dot = state(8);
-		double psi_x_dot = state(9);
-		double psi_y_dot = state(10);
-		double psi_z_dot = state(11);
-		double q_0 = state(12);
-		double q_1 = state(13);
-		double q_2 = state(14);
-		double q_3 = state(15);
+		double psi_x_dot = gyroMeas(0);
+		double psi_y_dot = gyroMeas(1);
+		double psi_z_dot = gyroMeas(2);
+		double q_0 = state(9);
+		double q_1 = state(10);
+		double q_2 = state(11);
+		double q_3 = state(12);
 
 
 		//// Predict position
@@ -62,32 +64,29 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 
 
 		// state = x,y,z,x_dot,y_dot,z_dot,x_dot_dot,y_dot_dot,z_dot_dot,psi_x_dot,psi_y_dot,q0,q1,q2,q3,B_x,B_y,B_z
-		Eigen::MatrixXd F = Eigen::MatrixXd::Zero(16, 16);
-		F.row(0) << 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(1) << 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(2) << 0, 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0;
-		F.row(3) << 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(4) << 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(5) << 0, 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0, 0, 0;
-		F.row(6) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(7) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0;
-		F.row(8) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0;
-		F.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
-		F.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
-		F.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
-		F.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0,0 , 0, 0, 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
-		F.row(13) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
-		F.row(14) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot,1, 1. / 2 * dt * psi_x_dot;
-		F.row(15) << 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
+		Eigen::MatrixXd F = Eigen::MatrixXd::Zero(13, 13);
+		F.row(0) << 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0;
+		F.row(1) << 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0;
+		F.row(2) << 0, 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0;
+		F.row(3) << 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0, 0;
+		F.row(4) << 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0;
+		F.row(5) << 0, 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0;
+		F.row(6) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
+		F.row(7) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
+		F.row(8) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
+		F.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
+		F.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot, 1, 1. / 2 * dt * psi_x_dot;
+		F.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
 
 		state = F * state;
-		
-		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ state(12), state(13), state(14), state(15) };
+		covariance = F * covariance * F.trace();
+
+		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ state(9), state(10), state(11), state(12) };
 		q.normalize();
-		state(12) = q.w();
-		state(13) = q.x();
-		state(14) = q.y();
-		state(15) = q.z();
+		state(9) = q.w();
+		state(10) = q.x();
+		state(11) = q.y();
+		state(12) = q.z();
 
 		setState(state);
 
@@ -100,19 +99,66 @@ void ExtendedKalmanFilter::predictionStep(double dt) {
 // Das was geschaetzt werden soll ist eigentlich nur Position, Geschwindigkeit und Orientierung des zu navigierenden Objekts. 
 // Anpassen des Zustandsvektors ist also von Noeten!!
 void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
-	
-	if(isInitialised()) {
-		Eigen::VectorXd state = getState();
-		Eigen::MatrixXd covariance = getCovariance();
-
-	}
-}
-
-void ExtendedKalmanFilter::updateGyro(Eigen::Vector3d gyroMeas, double dt) {
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
+
+		Eigen::Vector3d gMeas = accMeas;
+		gMeas.normalize();
+
+		// Acc Correction, Measurement noise noch hinzufuegen [R]
+		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
+		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+		H.row(0) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
+
+		Eigen::Vector3d y = accMeas - H * state;
+		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
+		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
+
+		state = state + K * y;
+		covariance = (Eigen::MatrixXd::Identity(13, 13) - K * H) * covariance;
+
+
+		/*
+		* Rechne ich nun so weiter oder kann ich das auch zu einem nichtlinearen Modell machen?
+		*/
+
+		// Orientation Correciton
+		Eigen::Vector3d p_dot_dot_hat = Eigen::Vector3d::Zero(3);
+
+		double q_0 = state(9);
+		double q_1 = state(10);
+		double q_2 = state(11);
+		double q_3 = state(12);
+		p_dot_dot_hat(0) = 2 * q_1 * q_3 - 2 * q_0 * q_2;
+		p_dot_dot_hat(1) = 2 * q_2 * q_3 + 2 * q_0 * q_1;
+		p_dot_dot_hat(2) = q_0 * q_0 - q_1 * q_1 - q_2 * q_2 + q_3 * q_3;
+
+		p_dot_dot_hat = 9.81 * p_dot_dot_hat;
+		y = gMeas - p_dot_dot_hat;
+
+		// non linear modell, bc of direction cosine
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_2, 2 * q_3, -2 * q_0, 2 * q_1;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_1, 2 * q_0, 2 * q_3, 2 * q_1;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, 2 * q_3;
+
+		S = H * covariance * H.transpose() + R;
+		K = covariance * H.transpose() * S.inverse();
+	
+
+		// Dont update the YAW Component with Accelerometer-Data
+		Eigen::VectorXd state_error = Eigen::VectorXd::Zero(13);
+		state_error = K * y;
+		state_error(12) = 0;
+
+		state = state + state_error;
+		covariance = (Eigen::MatrixXd::Identity(13, 13) - K * H) * covariance;
+
+		setState(state);
+		setCovariance(covariance);
 
 	}
 }
@@ -131,27 +177,23 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt) {
 
 	if (!isInitialised()) {
-		Eigen::VectorXd state = Eigen::VectorXd::Zero(16);
-		Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(16, 16);
+		Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+		Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
 
 
 		state(0) = gpsMeas(0); // -> Transform to NED Coordinates needed
 		state(1) = gpsMeas(1);
 		state(2) = gpsMeas(2);
-		state(3) = 0;
+		state(3) = 0;			// velocity
 		state(4) = 0;
 		state(5) = 0;
-		state(6) = 0;
+		state(6) = 0;		// acceleration
 		state(7) = 0;
 		state(8) = 0;
-		state(9) = 0; 
+		state(9) = 0;		// orientation
 		state(10) = 0;
 		state(11) = 0;
 		state(12) = 0;
-		state(13) = 0;
-		state(14) = 0;
-		state(15) = 0;
-
 		setState(state);
 		setCovariance(covariance);
 	}

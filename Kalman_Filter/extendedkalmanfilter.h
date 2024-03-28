@@ -49,9 +49,8 @@ public:
 
 
 	// Important functions fot the Kalman Filter including pysical Model and Prediction and Update
-	void predictionStep(double dt);
+	void predictionStep(Eigen::Vector3d gyroMeas,double dt);
 	void updateAcc(Eigen::Vector3d accMeas,double dt);
-	void updateGyro(Eigen::Vector3d gyroMeas,double dt);
 	void updateMag(Eigen::Vector3d magMeas, double dt);
 	void updateGPS(Eigen::Vector3d gpsMeas, double dt);
 
