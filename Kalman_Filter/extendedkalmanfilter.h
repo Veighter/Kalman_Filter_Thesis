@@ -25,17 +25,19 @@ namespace calibration {
 
 class ExtendedKalmanFilter {
 public:
-	ExtendedKalmanFilter() :init(false),calibrated(false){};
+	ExtendedKalmanFilter() :init(false), calibrated(false) {};
 	bool isInitialised() const { return init; }
 	Eigen::VectorXd getState() const {
 		return state;
 	}
 	Eigen::MatrixXd getCovariance() const { return covariance; }
-	Eigen::Vector3d getReferenceGeodeticPosition() const{ return referenceGeodeticPosition; }
+	Eigen::Vector3d getReferenceECEFPosition() const { return referenceECEFPosition; }
 	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
-	void setReferenceGeodeticPosition(const Eigen::Vector3d& ref) { referenceGeodeticPosition = ref; }
-	
+	void setReferenceGeodeticPosition(const Eigen::Vector3d& referenceGeodeticPosition) {
+		setReferenceECEFPosition(referenceGeodeticPosition);
+	}
+
 
 	void setAccelBias(Eigen::Vector3d b) { calibration_params.accelCali.bias = b; }
 	void setAccelTransformMatrix(Eigen::Matrix3d t) { calibration_params.accelCali.theta = t; }
@@ -53,8 +55,8 @@ public:
 
 
 	// Important functions fot the Kalman Filter including pysical Model and Prediction and Update
-	void predictionStep(Eigen::Vector3d gyroMeas,double dt);
-	void updateAcc(Eigen::Vector3d accMeas,double dt);
+	void predictionStep(Eigen::Vector3d gyroMeas, double dt);
+	void updateAcc(Eigen::Vector3d accMeas, double dt);
 	void updateMag(Eigen::Vector3d magMeas, double dt);
 	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial);
 
@@ -63,12 +65,16 @@ private:
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
 	CoordTransformer coordTransformer;
-	Eigen::Vector3d referenceGeodeticPosition;
+	Eigen::Vector3d referenceECEFPosition;
 
 	calibration::IMU_Calibration calibration_params;
 
 	Eigen::Vector3d coords; // coordinates in m (maybe geodetic)
 	Eigen::Quaternion<double> orientation;
+
+	void setReferenceECEFPosition(const Eigen::Vector3d& referenceGeodeticPosition) {
+		referenceECEFPosition = coordTransformer.geo_to_ecef(referenceGeodeticPosition);
+	}
 
 
 

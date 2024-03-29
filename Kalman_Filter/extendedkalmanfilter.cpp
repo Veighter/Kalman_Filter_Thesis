@@ -231,6 +231,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		setState(state);
 		setCovariance(covariance);
 	}
+	else {}
 
 }
 
