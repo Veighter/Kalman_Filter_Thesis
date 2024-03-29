@@ -6,6 +6,7 @@
 #include "sensors.h"
 
 
+
 namespace calibration {
 	struct Calibration_Params {
 		Eigen::Vector3d bias;
@@ -61,7 +62,7 @@ private:
 
 	calibration::IMU_Calibration calibration_params;
 
-	Eigen::Vector3d coords; // coordinates in mm
+	Eigen::Vector3d coords; // coordinates in m (maybe geodetic)
 	Eigen::Quaternion<double> orientation;
 
 

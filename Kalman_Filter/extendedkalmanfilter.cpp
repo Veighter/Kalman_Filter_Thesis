@@ -169,6 +169,9 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
 
+		Eigen::Vector3d mag_hat = Eigen::Vector3d::Zero();
+		// Richtung des 
+
 	}
 }
 
@@ -222,10 +225,6 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			state(12) = 0;
 		}
 		
-
-
-
-
 
 		setState(state);
 		setCovariance(covariance);
