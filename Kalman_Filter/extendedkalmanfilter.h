@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <Eigen\Dense>
-#include "sensors.h"
+#include "coordTransformation.h"
 
 
 
@@ -31,8 +31,11 @@ public:
 		return state;
 	}
 	Eigen::MatrixXd getCovariance() const { return covariance; }
+	Eigen::Vector3d getReferenceGeodeticPosition() const{ return referenceGeodeticPosition; }
 	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
+	void setReferenceGeodeticPosition(const Eigen::Vector3d& ref) { referenceGeodeticPosition = ref; }
+	
 
 	void setAccelBias(Eigen::Vector3d b) { calibration_params.accelCali.bias = b; }
 	void setAccelTransformMatrix(Eigen::Matrix3d t) { calibration_params.accelCali.theta = t; }
@@ -59,6 +62,8 @@ private:
 	bool init, calibrated;
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
+	CoordTransformer coordTransformer;
+	Eigen::Vector3d referenceGeodeticPosition;
 
 	calibration::IMU_Calibration calibration_params;
 

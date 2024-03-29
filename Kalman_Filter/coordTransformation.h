@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 #include <cmath>
 
-class Coord {
+class CoordTransformer {
 private:
 	double a = 6378137.0;                    // WGS-84 semi-major axis
 	double e2 = 6.6943799901377997e-3;       // WGS-84 first eccentricity squared

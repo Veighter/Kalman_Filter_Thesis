@@ -7,7 +7,6 @@
 #include <math.h>
 #include "sensors.h"
 #include "extendedkalmanfilter.h"
-#include "coordTransformation.h"
 
 // 8851 Daten sind da drin vorhanden
 // In welcher Einheit sind die Sekunden angegeben? Laut Abgabe in Microsekunden
@@ -262,11 +261,7 @@ int main()
 
 	}
 
-	Coord converter = Coord();
-
-	std::cout << converter.geo_to_ecef(Eigen::Vector3d{7.6773596013280120, 51.50269529190863, 0 });
-
-
+	
 	return 0;
 
 

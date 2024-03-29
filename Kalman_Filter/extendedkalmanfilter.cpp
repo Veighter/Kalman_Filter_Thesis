@@ -104,6 +104,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
 
+
 		Eigen::Vector3d gMeas = accMeas;
 		gMeas.normalize();
 
@@ -177,7 +178,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 // die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
 // Anfagnsorientierung, wie bestimme ich diese, muss ja wissen wo mein NED hinzeigt (Aus Accelerometer und Magnetometerwert grob bestimmen wie 
-// oben in den Update schritten
+// oben in den Update schritten, einmal 10 Measurements den Durchschnitt nehmen fuer eine Halbwegs gute Initialisierung
 
 /// <summary>
 /// Method for the Measurement Update of the navigational Object state with the GPS 
@@ -190,9 +191,10 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
 		Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
 
+		setReferenceGeodeticPosition(gpsMeas);
 
-		state(0) = gpsMeas(0); // -> Transform to NED Coordinates needed
-		state(1) = gpsMeas(1);
+		state(0) = 0; // -> Transform to NED Coordinates
+		state(1) = 0;
 		state(2) = 0;
 
 		if (gpsVelocityInitial.size() == 3) {
@@ -205,7 +207,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			state(4) = 0;
 			state(5) = 0;
 		}
-		
+
 		state(6) = 0;		// acceleration
 		state(7) = 0;
 		state(8) = 0;
@@ -219,12 +221,12 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		}
 		else {
-			state(9) = 0;					
+			state(9) = 0;
 			state(10) = 0;
 			state(11) = 0;
 			state(12) = 0;
 		}
-		
+
 
 		setState(state);
 		setCovariance(covariance);
