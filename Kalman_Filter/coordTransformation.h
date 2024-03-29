@@ -72,14 +72,26 @@ public:
 	// Returned array contains x, y, z in meters
 	Eigen::Vector3d geo_to_ecef(const Eigen::Vector3d& geo) {
 		Eigen::Vector3d ecef = Eigen::Vector3d::Zero();  // Results go here (x, y, z)
-		lat = geo[0]*M_PI/180.0;
-		lon = geo[1]*M_PI/180.0;
+		lat = geo[0] * M_PI / 180.0;
+		lon = geo[1] * M_PI / 180.0;
 		alt = geo[2];
 		n = a / std::sqrt(1 - e2 * std::sin(lat) * std::sin(lat));
 		ecef[0] = (n + alt) * std::cos(lat) * std::cos(lon);    // ECEF x
 		ecef[1] = (n + alt) * std::cos(lat) * std::sin(lon);    // ECEF y
 		ecef[2] = (n * (1 - e2) + alt) * std::sin(lat);         // ECEF z
 		return ecef;     // Return x, y, z in ECEF
+	}
+
+	Eigen::Matrix3d ecef_to_ned_RotationMatrix(Eigen::Vector3d& geo) {
+		double phi = geo[0] * M_PI / 180.0; // Latitude in radians
+		double lambda = geo[1] * M_PI / 180.0; // Longitude in radians
+
+		Eigen::Matrix3d rotation_matrix;
+		rotation_matrix << -std::sin(phi) * std::cos(lambda), -std::sin(phi) * std::sin(lambda), std::cos(phi),
+			-std::sin(lambda), std::cos(lambda), 0,
+			-std::cos(phi) * std::cos(lambda), -std::cos(phi) * std::sin(lambda), -std::sin(phi);
+
+		return rotation_matrix;
 	}
 };
 

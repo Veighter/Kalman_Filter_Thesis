@@ -34,18 +34,18 @@ public:
 	Eigen::Vector3d getReferenceECEFPosition() const { return referenceECEFPosition; }
 	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
-	void setReferenceGeodeticPosition(const Eigen::Vector3d& referenceGeodeticPosition) {
+	void setReferenceGeodeticPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
 
 
-	void setAccelBias(Eigen::Vector3d b) { calibration_params.accelCali.bias = b; }
-	void setAccelTransformMatrix(Eigen::Matrix3d t) { calibration_params.accelCali.theta = t; }
-	void setGyroBias(Eigen::Vector3d b) { calibration_params.gyroCali.bias = b; }
-	void setGyroTransformMatrix(Eigen::Matrix3d t) { calibration_params.gyroCali.theta = t; }
-	void setMagBias(Eigen::Vector3d b) { calibration_params.magCali.bias = b; }
-	void setMagTransformMatrix(Eigen::Matrix3d t) { calibration_params.magCali.theta = t; }
-	calibration::IMU_Calibration getCalibrationParams() { return calibration_params; }
+	void setAccelBias(Eigen::Vector3d b) { calibrationParams.accelCali.bias = b; }
+	void setAccelTransformMatrix(Eigen::Matrix3d t) { calibrationParams.accelCali.theta = t; }
+	void setGyroBias(Eigen::Vector3d b) { calibrationParams.gyroCali.bias = b; }
+	void setGyroTransformMatrix(Eigen::Matrix3d t) { calibrationParams.gyroCali.theta = t; }
+	void setMagBias(Eigen::Vector3d b) { calibrationParams.magCali.bias = b; }
+	void setMagTransformMatrix(Eigen::Matrix3d t) { calibrationParams.magCali.theta = t; }
+	calibration::IMU_Calibration getCalibrationParams() { return calibrationParams; }
 
 	void setCoords(Eigen::Vector3d c) { coords = c; }
 	Eigen::Vector3d getCoords() { return coords; }
@@ -66,16 +66,24 @@ private:
 	Eigen::MatrixXd covariance;
 	CoordTransformer coordTransformer;
 	Eigen::Vector3d referenceECEFPosition;
+	Eigen::Matrix3d rotationMatrix;
 
-	calibration::IMU_Calibration calibration_params;
+	calibration::IMU_Calibration calibrationParams;
 
 	Eigen::Vector3d coords; // coordinates in m (maybe geodetic)
 	Eigen::Quaternion<double> orientation;
 
-	void setReferenceECEFPosition(const Eigen::Vector3d& referenceGeodeticPosition) {
+	void setReferenceECEFPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		referenceECEFPosition = coordTransformer.geo_to_ecef(referenceGeodeticPosition);
+		setRotationMatrixECEF2NED(referenceGeodeticPosition);
+
 	}
 
+	void setRotationMatrixECEF2NED (Eigen::Vector3d& referenceGeodeticPosition){
+		rotationMatrix = coordTransformer.ecef_to_ned_RotationMatrix(referenceGeodeticPosition);
+	}
+
+	
 
 
 };
