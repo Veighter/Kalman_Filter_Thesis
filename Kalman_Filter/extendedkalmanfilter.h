@@ -39,8 +39,8 @@ public:
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
 	Eigen::Vector3i getInitMeasurementCount() { return initMeasurementCountMAGGPS; }
-	void updateMeasurementCount(uint_8t coloumn) { initMeasurementCountMAGGPS[0] += 1; }
-	uint8_t getInitMeasurementCount() const { return initMeasurementCountMAGGPS; }
+	void updateMeasurementCount(uint8_t coloumn) { initMeasurementCountMAGGPS[0] += 1; }
+	uint8_t getMinInitMeasurementCount() const { return minInitMeasurements; }
 
 
 	void setAccelBias(Eigen::Vector3d b) { calibrationParams.accelCali.bias = b; }
@@ -66,7 +66,7 @@ public:
 
 private:
 	bool init, calibrated;
-	uint8_t initMeasurements = 10;
+	uint8_t minInitMeasurements = 10;
 	Eigen::Vector3i initMeasurementCountMAGGPS;	// Counter for initial Measurements for INIT Orientation, Position
 												// [Mag, Acc, GPS]
 

@@ -174,7 +174,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		state(6) += accMeas(0);
 		state(7) += accMeas(1);
 		state(8) += accMeas(2);
-		 
+
 		measCount(0) += 1;
 	}
 }
@@ -220,82 +220,73 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 	if (!isInitialised()) {
 		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
-		uint8_t initMeasurements = getInitMeasurementCount();
-		uint8_t* initMeasurementsGPS = &initMeasurementCount(2); // Pointer Arithmetik Test
+		uint8_t initMeasurements = getMinInitMeasurementCount();
+		int* initMeasurementsGPS = &initMeasurementCount(2); // Pointer Arithmetik Test
 
-			if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementsGPS < initMeasurements) {
-				if (initMeasurementsGPS == 0 && initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0) {
-					Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
-					state(0) = gpsMeas(0); //latitude
-					state(1) = gpsMeas(1); // longitude
-					state(2) = 0;
-
-					setState(state);
-				}
-				else {
-					Eigen::Vector state = getState();
-					state(0) += gpsMeas(0);
-					state(1) += gpsMeas(1);
-					state(2) += 0;
-
-					setState(state);
-				}
-				//updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurements
-				*initMeasurementsGPS += 1;
-			}
-			else {
-				/*Eigen::VectorXd state = Eigen::VectorXd::Zero(13);*/
-				Eigen::VectorXd state = getState();
-				Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
-
-				// Median of the measurements
-				gpsMeas(0) += state(0);
-				gpsMeas(1) += state(1);
-				gpsMeas(2) += 0;
-
-				gpsMeas = gpsMeas / initMeasurements; // mean of the init GPS Positions (Median is better, bc of outliers) Fix after!!!
-
-				setReferenceGeodeticPosition(gpsMeas);
-
-				state(0) = 0; // -> Transform to NED Coordinates
-				state(1) = 0;
+		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || *initMeasurementsGPS < initMeasurements) {
+			if (initMeasurementsGPS == 0 && initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0) {
+				Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+				state(0) = gpsMeas(0); //latitude
+				state(1) = gpsMeas(1); // longitude
 				state(2) = 0;
 
-				if (gpsVelocityInitial.size() == 3) {
-					state(3) = gpsVelocityInitial(0);
-					state(4) = gpsVelocityInitial(1);
-					state(5) = gpsVelocityInitial(2);
-				}
-				else {
-					state(3) = 0;
-					state(4) = 0;
-					state(5) = 0;
-				}
-
-				state(6) = 0;		// acceleration
-				state(7) = 0;
-				state(8) = 0;
-
-				// orientation
-				if (orientationInitial.norm() > 0) { // >0 reicht, wegen rundungsfehlern kann die Norm auch groesser 1 sein, obwohl das normalisiert uebernommen werden soltle
-					state(9) = orientationInitial.w();
-					state(10) = orientationInitial.x();
-					state(11) = orientationInitial.y();
-					state(12) = orientationInitial.z();
-
-				}
-				else {
-					state(9) = 0;
-					state(10) = 0;
-					state(11) = 0;
-					state(12) = 0;
-				}
-
+				setState(state);
+			}
+			else {
+				Eigen::VectorXd state = getState();
+				state(0) += gpsMeas(0);
+				state(1) += gpsMeas(1);
+				state(2) += 0;
 
 				setState(state);
-				setCovariance(covariance);
-				initFinished();
 			}
+			//updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurements, Arrays eigentlich call by reference, verhalten ueberpruefn
+			*initMeasurementsGPS += 1;
+		}
+		else {
+			/*Eigen::VectorXd state = Eigen::VectorXd::Zero(13);*/
+			Eigen::VectorXd state = getState();
+			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
+
+			// Median of the measurements
+			gpsMeas(0) += state(0);
+			gpsMeas(1) += state(1);
+			gpsMeas(2) += 0;
+
+			gpsMeas = gpsMeas / getInitMeasurementCount()(2); // mean of the init GPS Positions (Median is better, bc of outliers) Fix after!!!
+
+			setReferenceGeodeticPosition(gpsMeas);
+
+			state(0) = 0; // -> Transform to NED Coordinates
+			state(1) = 0;
+			state(2) = 0;
+
+			if (gpsVelocityInitial.size() == 3) {
+				state(3) = gpsVelocityInitial(0);
+				state(4) = gpsVelocityInitial(1);
+				state(5) = gpsVelocityInitial(2);
+			}
+			else {
+				state(3) = 0;
+				state(4) = 0;
+				state(5) = 0;
+			}
+
+			state(6) = 0;		// acceleration = 0, da erstmal von Ruhe bei der Initialisierung ausgegangen wird
+			state(7) = 0;
+			state(8) = 0;
+
+			state(9) = 0;
+			state(10) = 0;
+			state(11) = 0;
+			state(12) = 0;
+
+
+
+			setState(state);
+			setCovariance(covariance);
+			initFinished();
+		}
 	}
 	else {}
 
