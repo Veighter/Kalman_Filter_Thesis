@@ -14,15 +14,20 @@
 using namespace sensorMeas;
 constexpr int IMU_DATA_ROWS = 8851;
 constexpr int GPS_DATA_ROWS = 872;
+constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
 
-// Was ist mit den GPS Daten, wie lege ich die an??
+/// <summary>
+/// 
+/// </summary>
 struct IMU_Data {
 	Eigen::Vector3d accelMeas{};
 	Eigen::Vector3d magMeas{};
 	Eigen::Vector3d gyroMeas{};
 };
+
+
 
 
 /// <summary>
@@ -38,9 +43,15 @@ struct IMU_Data {
 struct INS
 {
 	int imu_port{}; // connect port on the multiplexer
-	// IMU Data delivered
-	std::vector<double> timeData{ std::vector<double>(IMU_DATA_ROWS) };
+
+	// IMU specific Data
+	std::vector<double> timeDataIMU{ std::vector<double>(IMU_DATA_ROWS) };
 	std::vector<IMU_Data> imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
+
+	// GPS specific Data
+	std::vector<double> timeDataGPS{ std::vector<double>(GPS_DATA_ROWS) };
+	std::vector<Eigen::Vector3d> GPSData{ std::vector<Eigen::Vector3d>(GPS_DATA_ROWS) };
+
 	ExtendedKalmanFilter ekf{};
 
 } ins_1, ins_2, ins_3, ins_4;
@@ -52,8 +63,14 @@ struct INS
 /// ekf: Extended Kalman-Filter in the center of mass for interpreting the (calibrated) and averaged raw sensor data in the Center Of Mass
 /// </summary>
 struct CM_INS {
-	std::vector<double> timeData{ std::vector<double>(IMU_DATA_ROWS) };
+	std::vector<double> timeDataIMU{ std::vector<double>(IMU_DATA_ROWS) };
 	std::vector<IMU_Data> centralized_imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
+
+	std::vector<double> timeDataGPS{ std::vector<double>(GPS_DATA_ROWS) };
+
+	// 2 D Vector of the 3 GPS
+	std::vector<std::vector<Eigen::Vector3d>> GPSData{ num_GPSs,std::vector<Eigen::Vector3d>(GPS_DATA_ROWS) };
+
 	INS* inss[num_IMUs]{};
 	ExtendedKalmanFilter ekf{};
 
@@ -72,7 +89,7 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 	// Data Fusion Algorithms for Multiple IMUs
 	transformed_Data.gyroMeas = orientation.conjugate()._transformVector(ins.imuData[row].gyroMeas);
-	
+
 	// Mag Body Frame NED to ACC und Gyro Frame Orientation (without quaternion)
 	ins.imuData[row].magMeas(1) *= -1;
 	ins.imuData[row].magMeas(2) *= -1;
@@ -84,7 +101,7 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	psi_dot_dot.setZero();
 	// Computation of Angular acceleratio
 	if (1 <= row) {
-		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row - 1].accelMeas) / (ins.timeData[row] - ins.timeData[row - 1]);
+		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row - 1].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row - 1]);
 	}
 
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
@@ -105,13 +122,15 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 /// <param name="gpsmeas_1"></param> 
 /// <param name="gpsmeas_2"></param>
 /// <param name="gpsmeas_3"></param>
-void multiple_imu_fusion_raw(CM_INS& cm_ins, std::vector<GPSMeas> gps_measurements) {
+void multiple_imu_fusion_raw(CM_INS& cm_ins, std::vector<Eigen::Vector3d> gps_measurements) {
 
 }
 
 void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
+
+	// Compute the mean of all accumulated Data (better Median)
 	for (int row = 0; row < IMU_DATA_ROWS; row++) {
-		centralized_ins.timeData[row] = centralized_ins.inss[0]->timeData[row];
+		centralized_ins.timeDataIMU[row] = centralized_ins.inss[0]->timeDataIMU[row];
 
 		// transformieren in den VIMU Punkt und dann mitteln
 		for (INS* ins : centralized_ins.inss) {
@@ -134,14 +153,14 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 void get_calibrated_meas(INS& ins) {
 	calibration::IMU_Calibration calibration_Params = ins.ekf.getCalibrationParams();
 	calibration::Calibration_Params accel_Params = calibration_Params.accelCali;
-    calibration::Calibration_Params gyro_params = calibration_Params.gyroCali;
-    calibration::Calibration_Params mag_params = calibration_Params.magCali;
+	calibration::Calibration_Params gyro_params = calibration_Params.gyroCali;
+	calibration::Calibration_Params mag_params = calibration_Params.magCali;
 
-    for (IMU_Data& data : ins.imuData) {
-        data.accelMeas = accel_Params.theta * data.accelMeas - accel_Params.bias;
-        data.gyroMeas = gyro_params.theta * data.gyroMeas - gyro_params.bias;
-        data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
-    }
+	for (IMU_Data& data : ins.imuData) {
+		data.accelMeas = accel_Params.theta * data.accelMeas - accel_Params.bias;
+		data.gyroMeas = gyro_params.theta * data.gyroMeas - gyro_params.bias;
+		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
+	}
 
 }
 
@@ -156,6 +175,9 @@ int main()
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
 	std::string data_IMU_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" };
+	
+	// Time [us], Latitude [deg], Longitude Degree[deg] 
+	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
 
 
 	// Define INS1
@@ -229,7 +251,7 @@ int main()
 		if (!data_IMU.is_open())
 		{
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
-			//return 1; // Rückgabe eines Fehlercodes
+			return 1; // Rückgabe eines Fehlercodes
 		}
 
 		for (std::string values; std::getline(data_IMU, values) && row < IMU_DATA_ROWS; row++)
@@ -237,27 +259,52 @@ int main()
 
 			std::istringstream iss(values);
 
-			iss >> ins->timeData[row];
+			iss >> ins->timeDataIMU[row];
 
 			iss >> ins->imuData[row].accelMeas[0] >> ins->imuData[row].accelMeas[1] >> ins->imuData[row].accelMeas[2];
 
-			iss >> ins->imuData[row].gyroMeas[0] >> ins->imuData[row].gyroMeas[1] >> ins->imuData[row].gyroMeas[2]; // 0 in der Attitude fehlt hier doch oder??
+			iss >> ins->imuData[row].gyroMeas[0] >> ins->imuData[row].gyroMeas[1] >> ins->imuData[row].gyroMeas[2];
 
 			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
-			
+
 			IMU_Data meas = ins->imuData[row];
 			meas.accelMeas = meas.accelMeas * g / 1000.0;
 			meas.gyroMeas = meas.gyroMeas * M_PI / 180.0;
-	
+
 		}
 		row = 0;
 
 	}
+	
+	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
+		std::stringstream filepath{};
+		filepath << data_GPS_path << gps_number+1<< "/GPS_" << gps_number+1 << "_data.txt";
+		std::ifstream data_GPS{ filepath.str() };
 
+		if (!data_GPS.is_open())
+		{
+			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
+			return 1; // Rückgabe eines Fehlercodes
+		}
+
+		for (std::string values; std::getline(data_GPS, values) && row < GPS_DATA_ROWS; row++)
+		{
+			std::istringstream iss(values);
+
+			iss >> cm_INS.timeDataGPS[row];
+			
+			// Latitude, Longitude
+			iss >> cm_INS.GPSData[gps_number][row](0) >> cm_INS.GPSData[gps_number][row](1);
+			
+			// Altitude
+			cm_INS.GPSData[gps_number][row](2) = 0;
+		}
+
+	}
 	for (INS* ins : cm_INS.inss) {
-		 get_calibrated_meas(*ins);
-	 }
-	 // Domain Fusion -> Raw Data
+		get_calibrated_meas(*ins);
+	}
+	// Domain Fusion -> Raw Data
 	if (!estimation_fusion) {
 		// Transformieren der Datenpunkte in den Punkt der VIMU und dann mitteln der Werte
 		multiple_imu_fusion_raw(cm_INS);
@@ -267,7 +314,7 @@ int main()
 
 	}
 
-	
+
 	return 0;
 
 
@@ -333,10 +380,10 @@ int main()
 		   }*/
 
 
-//Eigen::Vector3d transformToVector(double& data_1, double& data_2, double& data_3) {
-//	//	Eigen::Vector3d data = Eigen::Vector3d::Zero();
-//	//	data << data_1, data_2, data_3;
-//	//	return data;
-//	//}
+		   //Eigen::Vector3d transformToVector(double& data_1, double& data_2, double& data_3) {
+		   //	//	Eigen::Vector3d data = Eigen::Vector3d::Zero();
+		   //	//	data << data_1, data_2, data_3;
+		   //	//	return data;
+		   //	//}
 
 

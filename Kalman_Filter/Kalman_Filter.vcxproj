@@ -138,6 +138,9 @@
     <ClInclude Include="sensors.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_1\GPS_1_data.txt" />
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_2\GPS_2_data.txt" />
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_3\GPS_3_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_0\IMU_0_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_1\IMU_1_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_6\IMU_6_data.txt" />

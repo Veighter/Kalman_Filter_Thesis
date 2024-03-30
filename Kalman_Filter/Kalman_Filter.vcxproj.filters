@@ -52,5 +52,14 @@
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_7\IMU_7_data.txt">
       <Filter>Source Files\Meas_Data</Filter>
     </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_1\GPS_1_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_2\GPS_2_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_3\GPS_3_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
   </ItemGroup>
 </Project>
