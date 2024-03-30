@@ -55,6 +55,7 @@ public:
 	Eigen::Vector3d getCoords() { return coords; }
 	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }// Orientation from IMU to VIMU is static!!
 	Eigen::Quaternion<double> getOrientation() { return orientation; }
+	Eigen::Quaternion<double> computeOrientation(double roll, double pitch, double yaw);
 
 
 
@@ -83,12 +84,17 @@ private:
 
 	void setReferenceECEFPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		referenceECEFPosition = coordTransformer.geo_to_ecef(referenceGeodeticPosition);
-		setRotationMatrixECEF2NED(referenceGeodeticPosition);
+		//	setRotationMatrixECEF2NED(referenceGeodeticPosition);
 
 	}
 
-	void setRotationMatrixECEF2NED (Eigen::Vector3d& referenceGeodeticPosition){
-		rotationMatrix = coordTransformer.ecef_to_ned_RotationMatrix(referenceGeodeticPosition);
+	Eigen::Vector3d computeECEF2NED(Eigen::Vector3d& geodeticPosition) {
+		setRotationMatrixECEF2NED(geodeticPosition);
+		return rotationMatrix * (coordTransformer.geo_to_ecef(geodeticPosition) - referenceECEFPosition);
+		}
+
+	void setRotationMatrixECEF2NED (Eigen::Vector3d& geodeticPosition){
+		rotationMatrix = coordTransformer.ecef_to_ned_RotationMatrix(geodeticPosition);
 	}
 
 	

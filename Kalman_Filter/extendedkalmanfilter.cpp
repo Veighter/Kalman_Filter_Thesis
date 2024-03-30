@@ -6,6 +6,8 @@ constexpr double GYRO_STD = 0.01 / 180.0 * M_PI;
 constexpr double INIT_VEL_STD = 10.0;
 constexpr double INIT_PSI_STD = 45.0 / 180.0 * M_PI;
 constexpr double GPS_POS_STD = 3.0;
+constexpr double g = 9.81;
+
 
 // state = p, p_dot, p_dot_dot, q
 
@@ -138,7 +140,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		p_dot_dot_hat(1) = 2 * q_2 * q_3 + 2 * q_0 * q_1;
 		p_dot_dot_hat(2) = q_0 * q_0 - q_1 * q_1 - q_2 * q_2 + q_3 * q_3;
 
-		p_dot_dot_hat = 9.81 * p_dot_dot_hat;
+		p_dot_dot_hat = g * p_dot_dot_hat;
 		y = gMeas - p_dot_dot_hat;
 
 		// non linear modell, bc of direction cosine
@@ -221,10 +223,9 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 	if (!isInitialised()) {
 		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
 		uint8_t initMeasurements = getMinInitMeasurementCount();
-		int* initMeasurementsGPS = &initMeasurementCount(2); // Pointer Arithmetik Test
-
-		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || *initMeasurementsGPS < initMeasurements) {
-			if (initMeasurementsGPS == 0 && initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0) {
+		
+		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2)< initMeasurements) {
+			if (initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0 && initMeasurementCount(2) == 0) {
 				Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
 				state(0) = gpsMeas(0); //latitude
 				state(1) = gpsMeas(1); // longitude
@@ -241,7 +242,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 				setState(state);
 			}
 			//updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurements, Arrays eigentlich call by reference, verhalten ueberpruefn
-			*initMeasurementsGPS += 1;
+			initMeasurementCount(2) += 1;
 		}
 		else {
 			/*Eigen::VectorXd state = Eigen::VectorXd::Zero(13);*/
@@ -271,25 +272,75 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 				state(4) = 0;
 				state(5) = 0;
 			}
+			
+			// Mean over acceleration init measurements
+			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
+			initAcc = initAcc / initMeasurementCount(0);
+
+
+			// Determine Pitch and Roll from Accelerometer
+			// compute pitch
+			double pitch = std::asin(initAcc(0) / g);
+
+			// compute roll 
+			double roll = std::atan2(initAcc(1), initAcc(2));
+
+
+			// Mean over magnetometer init measurements
+			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
+			initMag = initMag / initMeasurementCount(1);
+			
+			// Determine Yaw from magnetometer
+			double yaw = std::atan2(initMag(0), initMag(1));
+
+			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
+			
+			state(9) = initOrientation.w();
+			state(10) = initOrientation.x();
+			state(11) = initOrientation.y();
+			state(12) = initOrientation.z();
 
 			state(6) = 0;		// acceleration = 0, da erstmal von Ruhe bei der Initialisierung ausgegangen wird
 			state(7) = 0;
 			state(8) = 0;
-
-			state(9) = 0;
-			state(10) = 0;
-			state(11) = 0;
-			state(12) = 0;
-
-
 
 			setState(state);
 			setCovariance(covariance);
 			initFinished();
 		}
 	}
-	else {}
+	else {
+	
+	//Update step -> to ecef -> to NED
+	}
 
+}
+// sequence is ZYX -> Yaw, Pitch, Roll : Is it adaequat?? 1 of 12 possibilities
+// Quaternion & Rotation Sequences p.167
+Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, double pitch, double roll) {
+	/*Eigen::Matrix3d roll = Eigen::Matrix3d::Zero();
+	roll << 1, 0, 0, 0, std::cos(roll), -std::sin(roll), 0, std::sin(roll), std::cos(roll);
+
+	Eigen::Matrix3d pitch = Eigen::Matrix3d::Zero();
+	pitch << std::cos(pitch), 0, std::sin(pitch), 0, 1, 0, -std::sin(pitch), 0, std::cos(pitch);
+
+	Eigen::Matrix3d yaw = Eigen::Matrix3d::Zero();
+	yaw << std::cos(yaw), -std::sin(yaw), 0, std::sin(yaw), std::cos(yaw), 0, 0, 0, 1;*/
+
+	double y_c = std::cos(yaw / 2);
+	double y_s = std::sin(yaw / 2);
+	double p_c = std::cos(pitch / 2);
+	double p_s = std::sin(pitch / 2);
+	double r_c = std::sin(roll / 2);
+	double r_s = std::sin(roll / 2);
+
+	Eigen::Quaternion<double> q = Eigen::Quaternion<double>::Identity();
+	q.w() = y_c * p_c * r_c + y_s * p_s * r_s;
+	q.x() = y_c * p_c * r_s - y_s * p_s * r_c;
+	q.y() = y_c * p_s * r_c + y_s * p_c * r_s;
+	q.z() = y_s * p_c * r_c - y_c * p_s * r_s;
+
+	return q;
 }
 
 

@@ -72,7 +72,13 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 	// Data Fusion Algorithms for Multiple IMUs
 	transformed_Data.gyroMeas = orientation.conjugate()._transformVector(ins.imuData[row].gyroMeas);
-	transformed_Data.magMeas = orientation.conjugate()._transformVector(ins.imuData[row].magMeas);
+	
+	// Mag Body Frame NED to ACC und Gyro Frame Orientation (without quaternion)
+	ins.imuData[row].magMeas(1) *= -1;
+	ins.imuData[row].magMeas(2) *= -1;
+
+
+	transformed_Data.magMeas = orientation.conjugate()._transformVector(ins.imuData[row].magMeas);// Magnetometer has NED locally, first orientation in there
 
 	Eigen::Vector3d psi_dot_dot;
 	psi_dot_dot.setZero();
