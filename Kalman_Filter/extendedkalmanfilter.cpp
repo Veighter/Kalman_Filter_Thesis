@@ -162,6 +162,21 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		setCovariance(covariance);
 
 	}
+	else {
+		Eigen::Vector3i measCount = getInitMeasurementCount();
+		Eigen::VectorXd state;
+		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
+			state = Eigen::VectorXd::Zero(13);
+		}
+		else {
+			state = getState();
+		}
+		state(6) += accMeas(0);
+		state(7) += accMeas(1);
+		state(8) += accMeas(2);
+		 
+		measCount(0) += 1;
+	}
 }
 
 void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
@@ -173,6 +188,22 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		Eigen::Vector3d mag_hat = Eigen::Vector3d::Zero();
 		// Richtung des 
 
+	}
+	else {
+
+		Eigen::Vector3i measCount = getInitMeasurementCount();
+		Eigen::VectorXd state;
+		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
+			state = Eigen::VectorXd::Zero(13);
+		}
+		else {
+			state = getState();
+		}// Use uninitialisied Quaternion state for placeholder
+		state(9) += magMeas(0);
+		state(10) += magMeas(1);
+		state(11) += magMeas(2);
+
+		measCount(1) += 1;
 	}
 }
 
@@ -188,48 +219,83 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 }) {
 
 	if (!isInitialised()) {
-		Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
-		Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
+		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
+		uint8_t initMeasurements = getInitMeasurementCount();
+		uint8_t* initMeasurementsGPS = &initMeasurementCount(2); // Pointer Arithmetik Test
 
-		setReferenceGeodeticPosition(gpsMeas);
+			if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementsGPS < initMeasurements) {
+				if (initMeasurementsGPS == 0 && initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0) {
+					Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+					state(0) = gpsMeas(0); //latitude
+					state(1) = gpsMeas(1); // longitude
+					state(2) = 0;
 
-		state(0) = 0; // -> Transform to NED Coordinates
-		state(1) = 0;
-		state(2) = 0;
+					setState(state);
+				}
+				else {
+					Eigen::Vector state = getState();
+					state(0) += gpsMeas(0);
+					state(1) += gpsMeas(1);
+					state(2) += 0;
 
-		if (gpsVelocityInitial.size() == 3) {
-			state(3) = gpsVelocityInitial(0);
-			state(4) = gpsVelocityInitial(1);
-			state(5) = gpsVelocityInitial(2);
-		}
-		else {
-			state(3) = 0;
-			state(4) = 0;
-			state(5) = 0;
-		}
+					setState(state);
+				}
+				//updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurements
+				*initMeasurementsGPS += 1;
+			}
+			else {
+				/*Eigen::VectorXd state = Eigen::VectorXd::Zero(13);*/
+				Eigen::VectorXd state = getState();
+				Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
 
-		state(6) = 0;		// acceleration
-		state(7) = 0;
-		state(8) = 0;
+				// Median of the measurements
+				gpsMeas(0) += state(0);
+				gpsMeas(1) += state(1);
+				gpsMeas(2) += 0;
 
-		// orientation
-		if (orientationInitial.norm() > 0) { // >0 reicht, wegen rundungsfehlern kann die Norm auch groesser 1 sein, obwohl das normalisiert uebernommen werden soltle
-			state(9) = orientationInitial.w();
-			state(10) = orientationInitial.x();
-			state(11) = orientationInitial.y();
-			state(12) = orientationInitial.z();
+				gpsMeas = gpsMeas / initMeasurements; // mean of the init GPS Positions (Median is better, bc of outliers) Fix after!!!
 
-		}
-		else {
-			state(9) = 0;
-			state(10) = 0;
-			state(11) = 0;
-			state(12) = 0;
-		}
+				setReferenceGeodeticPosition(gpsMeas);
+
+				state(0) = 0; // -> Transform to NED Coordinates
+				state(1) = 0;
+				state(2) = 0;
+
+				if (gpsVelocityInitial.size() == 3) {
+					state(3) = gpsVelocityInitial(0);
+					state(4) = gpsVelocityInitial(1);
+					state(5) = gpsVelocityInitial(2);
+				}
+				else {
+					state(3) = 0;
+					state(4) = 0;
+					state(5) = 0;
+				}
+
+				state(6) = 0;		// acceleration
+				state(7) = 0;
+				state(8) = 0;
+
+				// orientation
+				if (orientationInitial.norm() > 0) { // >0 reicht, wegen rundungsfehlern kann die Norm auch groesser 1 sein, obwohl das normalisiert uebernommen werden soltle
+					state(9) = orientationInitial.w();
+					state(10) = orientationInitial.x();
+					state(11) = orientationInitial.y();
+					state(12) = orientationInitial.z();
+
+				}
+				else {
+					state(9) = 0;
+					state(10) = 0;
+					state(11) = 0;
+					state(12) = 0;
+				}
 
 
-		setState(state);
-		setCovariance(covariance);
+				setState(state);
+				setCovariance(covariance);
+				initFinished();
+			}
 	}
 	else {}
 

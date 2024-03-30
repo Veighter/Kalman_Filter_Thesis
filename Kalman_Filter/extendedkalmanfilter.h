@@ -32,11 +32,15 @@ public:
 	}
 	Eigen::MatrixXd getCovariance() const { return covariance; }
 	Eigen::Vector3d getReferenceECEFPosition() const { return referenceECEFPosition; }
-	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
+	void setState(const Eigen::VectorXd& new_state) { state = new_state;}
+	void initFinished() { init = true; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
 	void setReferenceGeodeticPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
+	Eigen::Vector3i getInitMeasurementCount() { return initMeasurementCountMAGGPS; }
+	void updateMeasurementCount(uint_8t coloumn) { initMeasurementCountMAGGPS[0] += 1; }
+	uint8_t getInitMeasurementCount() const { return initMeasurementCountMAGGPS; }
 
 
 	void setAccelBias(Eigen::Vector3d b) { calibrationParams.accelCali.bias = b; }
@@ -62,6 +66,10 @@ public:
 
 private:
 	bool init, calibrated;
+	uint8_t initMeasurements = 10;
+	Eigen::Vector3i initMeasurementCountMAGGPS;	// Counter for initial Measurements for INIT Orientation, Position
+												// [Mag, Acc, GPS]
+
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
 	CoordTransformer coordTransformer;
