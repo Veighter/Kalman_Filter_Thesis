@@ -18,6 +18,8 @@ constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
 
+constexpr int row_no_broken_time_data = 124;
+
 /// <summary>
 /// 
 /// </summary>
@@ -144,6 +146,43 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].gyroMeas /= num_IMUs;
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
+
+	// Compute the mean of the GPS in Situ in the first GPS_Data Vector
+
+	for (int row = 0; row < GPS_DATA_ROWS; row++)
+	{
+		for (int gps_number = 1; gps_number < num_GPSs; gps_number++) {
+
+			centralized_ins.GPSData[0][row] += centralized_ins.GPSData[gps_number][row];
+		}
+		centralized_ins.GPSData[0][row] /= num_GPSs;
+	}
+
+
+	// Durchgehen der beiden Vektoren, erst wenn ich GPS habe, dann will ich auch erst die anderen Messungen sammeln
+
+	int row_imu = row_no_broken_time_data;
+	int row_gps = 0;
+
+	double time_start = cm_INS.timeDataGPS[0];
+
+	// wait for GPS
+	for (;; row_imu++) {
+		if (cm_INS.timeDataIMU[row_imu] >= time_start) {
+			break;
+		}
+	}
+	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
+		//	cm_INS.ekf.predictionStep()
+
+		//	ekf.updateacc()
+
+		// ekf.updateGPS()
+	}
+
+
+
+
 }
 
 /// <summary>
@@ -175,7 +214,7 @@ int main()
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
 	std::string data_IMU_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" };
-	
+
 	// Time [us], Latitude [deg], Longitude Degree[deg] 
 	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
 
@@ -268,6 +307,7 @@ int main()
 			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
 
 			IMU_Data meas = ins->imuData[row];
+			ins->timeDataIMU[row] /= 1e6;
 			meas.accelMeas = meas.accelMeas * g / 1000.0;
 			meas.gyroMeas = meas.gyroMeas * M_PI / 180.0;
 
@@ -275,10 +315,17 @@ int main()
 		row = 0;
 
 	}
-	
+
+	for (row = 0; row < 1000; row++) {
+		if (cm_INS.inss[0]->timeDataIMU[row] == 24460314.0 / 1e6) {
+			std::cout << row << std::endl;
+		}
+
+	}
+
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 		std::stringstream filepath{};
-		filepath << data_GPS_path << gps_number+1<< "/GPS_" << gps_number+1 << "_data.txt";
+		filepath << data_GPS_path << gps_number + 1 << "/GPS_" << gps_number + 1 << "_data.txt";
 		std::ifstream data_GPS{ filepath.str() };
 
 		if (!data_GPS.is_open())
@@ -286,16 +333,17 @@ int main()
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
 			return 1; // Rückgabe eines Fehlercodes
 		}
-
+		row = 0;
 		for (std::string values; std::getline(data_GPS, values) && row < GPS_DATA_ROWS; row++)
 		{
 			std::istringstream iss(values);
 
 			iss >> cm_INS.timeDataGPS[row];
-			
+			cm_INS.timeDataGPS[row] /= 1e6;
+
 			// Latitude, Longitude
 			iss >> cm_INS.GPSData[gps_number][row](0) >> cm_INS.GPSData[gps_number][row](1);
-			
+
 			// Altitude
 			cm_INS.GPSData[gps_number][row](2) = 0;
 		}

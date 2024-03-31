@@ -178,6 +178,8 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		state(8) += accMeas(2);
 
 		measCount(0) += 1;
+
+		setState(state);
 	}
 }
 
@@ -188,7 +190,40 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		Eigen::MatrixXd covariance = getCovariance();
 
 		Eigen::Vector3d mag_hat = Eigen::Vector3d::Zero();
-		// Richtung des 
+		// Richtung des Magnetfelds
+		double q_0 = state(9);
+		double q_1 = state(10);
+		double q_2 = state(11);
+		double q_3 = state(12);
+
+		// Magnet is in north direction, only x directed 
+		mag_hat(0) = q_0 * q_0 + q_1 * q_1 - q_2 * q_2 - q_3 * q_3;
+		mag_hat(1) = 2 * q_1 * q_2 - 2 * q_0 * q_3;
+		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
+
+		magMeas.normalize();
+		Eigen::Vector3d y = magMeas-mag_hat;
+
+		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
+		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
+
+		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
+		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
+
+		// Dont update the Roll and Pitch Component with Magnetometer-Data
+		Eigen::VectorXd state_error = Eigen::VectorXd::Zero(13);
+		state_error = K * y;
+		state_error(10) = 0; 
+		state_error(11) = 0;
+
+		state = state + state_error;
+		covariance = (Eigen::MatrixXd::Identity(13, 13) - K * H) * covariance;
+
+		setState(state);
+		setCovariance(covariance);
 
 	}
 	else {
@@ -197,6 +232,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		Eigen::VectorXd state;
 		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
 			state = Eigen::VectorXd::Zero(13);
+
 		}
 		else {
 			state = getState();
@@ -206,6 +242,8 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		state(11) += magMeas(2);
 
 		measCount(1) += 1;
+
+		setState(state);
 	}
 }
 
@@ -223,8 +261,8 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 	if (!isInitialised()) {
 		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
 		uint8_t initMeasurements = getMinInitMeasurementCount();
-		
-		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2)< initMeasurements) {
+
+		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2) < initMeasurements) {
 			if (initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0 && initMeasurementCount(2) == 0) {
 				Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
 				state(0) = gpsMeas(0); //latitude
@@ -272,7 +310,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 				state(4) = 0;
 				state(5) = 0;
 			}
-			
+
 			// Mean over acceleration init measurements
 			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
 			initAcc = initAcc / initMeasurementCount(0);
@@ -289,12 +327,12 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			// Mean over magnetometer init measurements
 			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
 			initMag = initMag / initMeasurementCount(1);
-			
+
 			// Determine Yaw from magnetometer
 			double yaw = std::atan2(initMag(0), initMag(1));
 
 			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
-			
+
 			state(9) = initOrientation.w();
 			state(10) = initOrientation.x();
 			state(11) = initOrientation.y();
@@ -310,8 +348,29 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		}
 	}
 	else {
-	
-	//Update step -> to ecef -> to NED
+		Eigen::VectorXd state = getState();
+		Eigen::MatrixXd covariance = getCovariance();
+
+		// GPS in NED locally Coordinates
+		gpsMeas = computeECEF2NED(gpsMeas);
+
+		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
+		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+		H.row(0) << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+
+		Eigen::Vector3d y = gpsMeas - H * state;
+		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
+		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
+
+		state = state + K * y;
+		covariance = (Eigen::MatrixXd::Identity(13, 13) - K * H) * covariance;
+
+		setState(state);
+		setCovariance(covariance);
+
+		//Update step -> to ecef -> to NED
 	}
 
 }
