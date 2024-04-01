@@ -114,20 +114,6 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 }
 
 
-/// <summary>
-/// Berechnung der Multi IMU Fusion des Tetreader Konstrukts
-/// </summary>
-/// <param name="ins_1"></param> ins_1, carrying the information of the imu at port 0 and position 1, not the center of mass
-/// <param name="ins_2"></param> ins_2, carrying the information of the imu at port 1 and position 2, not the center of mass
-/// <param name="ins_3"></param> ins_3, carrying the information of the imu at port 6 and position 3, not the center of mass
-/// <param name="ins_4"></param> ins_4, carrying the information of the imu at port 7 and position 4, not the center of mass
-/// <param name="gpsmeas_1"></param> 
-/// <param name="gpsmeas_2"></param>
-/// <param name="gpsmeas_3"></param>
-void multiple_imu_fusion_raw(CM_INS& cm_ins, std::vector<Eigen::Vector3d> gps_measurements) {
-
-}
-
 void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 
 	// Compute the mean of all accumulated Data (better Median)
@@ -155,6 +141,8 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 
 			centralized_ins.GPSData[0][row] += centralized_ins.GPSData[gps_number][row];
 		}
+
+		// Pick the in Situ GPS Data Vector
 		centralized_ins.GPSData[0][row] /= num_GPSs;
 	}
 
@@ -172,12 +160,26 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 			break;
 		}
 	}
+	double dt_imu{}, dt_gps{};
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-		//	cm_INS.ekf.predictionStep()
+		// Prediction Step
 
-		//	ekf.updateacc()
+		double dt_imu = cm_INS.timeDataIMU[row_imu] - cm_INS.timeDataIMU[row_imu-(int)1];
+		cm_INS.ekf.predictionStep(cm_INS.centralized_imuData[row_imu].gyroMeas, dt_imu);
 
-		// ekf.updateGPS()
+		// Update Step
+		cm_INS.ekf.updateAcc(cm_INS.centralized_imuData[row_imu].accelMeas, dt_imu);
+		row_imu++;
+
+		if (cm_INS.timeDataIMU[row_imu - (int)1] <= cm_INS.timeDataGPS[row_gps] <= cm_INS.timeDataIMU[row_imu]) {
+
+			// Important for velocioty (if added)
+			dt_gps = cm_INS.timeDataGPS[row_gps] - cm_INS.timeDataGPS[row_gps - (int)1];
+
+			cm_INS.ekf.updateGPS(centralized_ins.GPSData[0][row_gps], dt_gps);
+			row_gps++;
+		}
+
 	}
 
 

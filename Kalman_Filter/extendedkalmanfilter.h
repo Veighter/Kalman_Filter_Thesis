@@ -63,7 +63,7 @@ public:
 	void predictionStep(Eigen::Vector3d gyroMeas, double dt);
 	void updateAcc(Eigen::Vector3d accMeas, double dt);
 	void updateMag(Eigen::Vector3d magMeas, double dt);
-	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial);
+	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
 
 private:
 	bool init, calibrated;

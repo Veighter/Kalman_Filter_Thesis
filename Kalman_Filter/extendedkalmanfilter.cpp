@@ -2,14 +2,18 @@
 
 // For computing the Fehlerfortpflanzungsmatrix
 constexpr double ACCEL_STD = 1.0;
-constexpr double GYRO_STD = 0.01 / 180.0 * M_PI;
-constexpr double INIT_VEL_STD = 10.0;
-constexpr double INIT_PSI_STD = 45.0 / 180.0 * M_PI;
+constexpr double GYRO_STD = 0.1 / 180.0 * M_PI;
+constexpr double MAG_STD = 1.0;
 constexpr double GPS_POS_STD = 3.0;
+
+// Initial standard derivation has to be high, bc we dont know exactly what they are
+constexpr double INIT_VEL_STD = 10.0;
+constexpr double INIT_ORIENTATION_VAR = 0.125;
+constexpr double INIT_ORIENTATION_COVAR = 0.0003;
+
 constexpr double g = 9.81;
 
 
-// state = p, p_dot, p_dot_dot, q
 
 // Prediciton Step with implicit Gyro inputs, decreases number of states https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6316172
 void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
@@ -75,13 +79,25 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		F.row(5) << 0, 0, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0;
 		F.row(6) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
 		F.row(7) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
-		F.row(8) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
-		F.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
-		F.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot, 1, 1. / 2 * dt * psi_x_dot;
-		F.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
+		F.row(8) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
+		F.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1. / 2 * dt * psi_x_dot, -1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot;
+		F.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_x_dot, 1, 1. / 2 * dt * psi_z_dot, -1. / 2 * dt * psi_y_dot;
+		F.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_z_dot, 1, 1. / 2 * dt * psi_x_dot;
+		F.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
 
-		state = F * state;
-		covariance = F * covariance * F.trace();
+		Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(13, 13);
+		
+		// Only Orientation error is looked at now, other dependencies not known (bad)
+		double gyro_var = GYRO_STD * GYRO_STD;
+		Q(9, 9) = gyro_var;
+		Q(10, 10) = gyro_var;
+		Q(11, 11) = gyro_var;
+		Q(12, 12) = gyro_var;
+
+
+
+			state = F * state;
+		covariance = F * covariance * F.transpose() + Q;
 
 		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ state(9), state(10), state(11), state(12) };
 		q.normalize();
@@ -91,7 +107,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		state(12) = q.z();
 
 		setState(state);
-
+		setCovariance(covariance);
 	}
 }
 
@@ -113,6 +129,13 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		// Acc Correction, Measurement noise noch hinzufuegen [R]
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+
+		double acc_var{};
+		acc_var = ACCEL_STD * ACCEL_STD;
+		R(0, 0) = acc_var;
+		R(1, 1) = acc_var;
+		R(2, 2) = acc_var;
+
 		H.row(0) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
 		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
 		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
@@ -202,10 +225,15 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
 
 		magMeas.normalize();
-		Eigen::Vector3d y = magMeas-mag_hat;
+		Eigen::Vector3d y = magMeas - mag_hat;
 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+
+		R(0, 0) = 1;
+		R(1, 1) = 1;
+		R(2, 2) = 1;
+
 		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
 		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
 		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
@@ -216,7 +244,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		// Dont update the Roll and Pitch Component with Magnetometer-Data
 		Eigen::VectorXd state_error = Eigen::VectorXd::Zero(13);
 		state_error = K * y;
-		state_error(10) = 0; 
+		state_error(10) = 0;
 		state_error(11) = 0;
 
 		state = state + state_error;
@@ -256,7 +284,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 /// </summary>
 /// <param name="gpsMeas"></param>GPS given in LLA
 /// <param name="dt"></param>
-void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 }) {
+void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial) {
 
 	if (!isInitialised()) {
 		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
@@ -283,11 +311,11 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			initMeasurementCount(2) += 1;
 		}
 		else {
-			/*Eigen::VectorXd state = Eigen::VectorXd::Zero(13);*/
 			Eigen::VectorXd state = getState();
-			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
 
-			// Median of the measurements
+
+
+			// Mean (better Median) of the measurements
 			gpsMeas(0) += state(0);
 			gpsMeas(1) += state(1);
 			gpsMeas(2) += 0;
@@ -342,6 +370,33 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			state(7) = 0;
 			state(8) = 0;
 
+			//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3
+			// Fist Init of Covariane
+			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
+
+			double gps_var{}, vel_var{}, acc_var{};
+			gps_var = GPS_POS_STD * GPS_POS_STD;
+			vel_var = INIT_VEL_STD * INIT_VEL_STD;
+			acc_var = ACCEL_STD * ACCEL_STD;
+
+
+			covariance(0, 0) = gps_var;
+			covariance(1, 1) = gps_var;
+			covariance(2, 2) = gps_var;
+			covariance(3, 3) = vel_var;
+			covariance(4, 4) = vel_var;
+			covariance(5, 5) = vel_var;
+			covariance(6, 6) = acc_var;
+			covariance(7, 7) = acc_var;
+			covariance(8, 8) = acc_var;
+
+			// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
+			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
+			covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
+			covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR;
+			covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR;
+
+
 			setState(state);
 			setCovariance(covariance);
 			initFinished();
@@ -356,6 +411,13 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
+
+		double gps_var = GPS_POS_STD * GPS_POS_STD;
+
+		R(0, 0) = gps_var;
+		R(1, 1) = gps_var;
+		R(2, 2) = gps_var;
+
 		H.row(0) << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 		H.row(1) << 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 		H.row(2) << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
