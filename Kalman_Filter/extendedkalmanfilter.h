@@ -39,7 +39,7 @@ public:
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
 	Eigen::Vector3i getInitMeasurementCount() { return initMeasurementCountMAGGPS; }
-	void updateMeasurementCount(uint8_t coloumn) { initMeasurementCountMAGGPS[0] += 1; }
+	void updateMeasurementCount(uint8_t coloumn) { initMeasurementCountMAGGPS[coloumn] += 1; }
 	uint8_t getMinInitMeasurementCount() const { return minInitMeasurements; }
 
 
@@ -51,7 +51,7 @@ public:
 	void setMagTransformMatrix(Eigen::Matrix3d t) { calibrationParams.magCali.theta = t; }
 	calibration::IMU_Calibration getCalibrationParams() { return calibrationParams; }
 
-	void setCoords(Eigen::Vector3d c) { coords = c; }
+	void setCoords(Eigen::Vector3d c) { coords = c/1000.0; }
 	Eigen::Vector3d getCoords() { return coords; }
 	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }// Orientation from IMU to VIMU is static!!
 	Eigen::Quaternion<double> getOrientation() { return orientation; }

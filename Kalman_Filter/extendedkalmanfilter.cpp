@@ -1,4 +1,5 @@
 #include "extendedkalmanfilter.h"
+#include <iostream>
 
 // For computing the Fehlerfortpflanzungsmatrix
 constexpr double ACCEL_STD = 1.0;
@@ -86,7 +87,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		F.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1. / 2 * dt * psi_z_dot, 1. / 2 * dt * psi_y_dot, -1. / 2 * dt * psi_x_dot, 1;
 
 		Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(13, 13);
-		
+
 		// Only Orientation error is looked at now, other dependencies not known (bad)
 		double gyro_var = GYRO_STD * GYRO_STD;
 		Q(9, 9) = gyro_var;
@@ -96,7 +97,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 
 
 
-			state = F * state;
+		state = F * state;
 		covariance = F * covariance * F.transpose() + Q;
 
 		Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ state(9), state(10), state(11), state(12) };
@@ -153,7 +154,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		*/
 
 		// Orientation Correciton
-		Eigen::Vector3d p_dot_dot_hat = Eigen::Vector3d::Zero(3);
+		Eigen::Vector3d p_dot_dot_hat = Eigen::Vector3d::Zero();
 
 		double q_0 = state(9);
 		double q_1 = state(10);
@@ -192,6 +193,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		Eigen::VectorXd state;
 		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
 			state = Eigen::VectorXd::Zero(13);
+			
 		}
 		else {
 			state = getState();
@@ -200,7 +202,9 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		state(7) += accMeas(1);
 		state(8) += accMeas(2);
 
-		measCount(0) += 1;
+		
+
+		updateMeasurementCount(0);
 
 		setState(state);
 	}
@@ -260,7 +264,6 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		Eigen::VectorXd state;
 		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
 			state = Eigen::VectorXd::Zero(13);
-
 		}
 		else {
 			state = getState();
@@ -269,7 +272,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		state(10) += magMeas(1);
 		state(11) += magMeas(2);
 
-		measCount(1) += 1;
+		updateMeasurementCount(1);
 
 		setState(state);
 	}
@@ -307,8 +310,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 				setState(state);
 			}
-			//updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurements, Arrays eigentlich call by reference, verhalten ueberpruefn
-			initMeasurementCount(2) += 1;
+			updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurement
 		}
 		else {
 			Eigen::VectorXd state = getState();
