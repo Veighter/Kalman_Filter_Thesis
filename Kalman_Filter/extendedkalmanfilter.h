@@ -51,7 +51,7 @@ public:
 	void setMagTransformMatrix(Eigen::Matrix3d t) { calibrationParams.magCali.theta = t; }
 	calibration::IMU_Calibration getCalibrationParams() { return calibrationParams; }
 
-	void setCoords(Eigen::Vector3d c) { coords = c/1000.0; }
+	void setCoords(Eigen::Vector3d c) { coords = c/1e3; }
 	Eigen::Vector3d getCoords() { return coords; }
 	void setOrientation(Eigen::Quaternion<double> q) { orientation = q; }// Orientation from IMU to VIMU is static!!
 	Eigen::Quaternion<double> getOrientation() { return orientation; }

@@ -90,12 +90,12 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	IMU_Data transformed_Data{ IMU_Data{} };
 
 	// Data Fusion Algorithms for Multiple IMUs
-	transformed_Data.gyroMeas = orientation.conjugate()._transformVector(ins.imuData[row].gyroMeas);
+	transformed_Data.gyroMeas = orientation._transformVector(ins.imuData[row].gyroMeas);
 
-	// Mag Body Frame NED to ACC und Gyro Frame Orientation (without quaternion)
+	// Mag Body Frame NED to ACC und Gyro Frame Orientation (without quaternion) -> is it Right??
 	ins.imuData[row].magMeas(1) *= -1;
 	ins.imuData[row].magMeas(2) *= -1;
-	transformed_Data.magMeas = orientation.conjugate()._transformVector(ins.imuData[row].magMeas);
+	transformed_Data.magMeas = orientation._transformVector(ins.imuData[row].magMeas);
 
 
 	Eigen::Vector3d psi_dot_dot;
@@ -106,7 +106,7 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	}
 
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
-	transformed_Data.accelMeas = orientation.conjugate()._transformVector(ins.imuData[row].accelMeas) - orientation.conjugate()._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation.conjugate()._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords())));
+	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords())));
 
 
 	return transformed_Data;
@@ -133,7 +133,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
 
-	return ;
+	return;
 
 	// Compute the mean of the GPS in Situ in the first GPS_Data Vector
 
@@ -207,11 +207,9 @@ void get_calibrated_meas(INS& ins) {
 	calibration::Calibration_Params mag_params = calibration_Params.magCali;
 
 	for (IMU_Data& data : ins.imuData) {
-	/*	data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1000.0; // m/s2 */
-		data.accelMeas =  data.accelMeas * 9.81 / 1000.0; // m/s2
-
-		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias)*M_PI/180.0; // rad/s
-		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias); 
+		data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2 
+		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
+		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
 	}
 
 }
@@ -226,7 +224,7 @@ int main()
 
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
-	std::string data_IMU_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_" };
+	std::string data_IMU_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" };
 
 	// Time [us], Latitude [deg], Longitude Degree[deg] 
 	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
@@ -246,7 +244,7 @@ int main()
 
 	// Define INS2
 	ins_2.imu_port = 1;
-	ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 ,75.4449 ,54.5905 });
+	ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 *1e3,75.4449*1e3 ,54.5905*1e3 });
 	ins_2.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.119, 0.444, 0.858});
 	ins_2.ekf.setAccelBias(Eigen::Vector3d{ -3.1927911, -19.8014002, 5.25052353 });
 	ins_2.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592).finished());
@@ -258,7 +256,7 @@ int main()
 
 	// Define INS3
 	ins_3.imu_port = 6;
-	ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838, -1.5375, -53.0125 });
+	ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838*1e3, -1.5375*1e3, -53.0125*1e3 });
 	ins_3.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398});
 	ins_3.ekf.setAccelBias(Eigen::Vector3d{ -3.00372421, -8.129569, 16.655453 });
 	ins_3.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779).finished());
@@ -270,7 +268,7 @@ int main()
 
 	// Define INS4
 	ins_4.imu_port = 7;
-	ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521, -75.3151, 54.5905 }); // given in mm, conversion to m in ekf
+	ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521*1e3, -75.3151*1e3, 54.5905*1e3 }); // given in mm, conversion to m in ekf
 	ins_4.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858});
 	ins_4.ekf.setAccelBias(Eigen::Vector3d{ 0.513195483, -6.38354307, 18.6818155 });
 	ins_4.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184).finished());
@@ -322,7 +320,7 @@ int main()
 			// Time in seconds
 			ins->timeDataIMU[row] /= 1e3;
 
-		
+
 		}
 		row = 0;
 
