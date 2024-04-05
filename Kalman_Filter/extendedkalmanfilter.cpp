@@ -125,6 +125,9 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 
 		Eigen::Vector3d gMeas = accMeas;
+
+		// Correction for the gravity
+		gMeas(2) += g;
 		gMeas.normalize();
 
 		// Acc Correction, Measurement noise noch hinzufuegen [R]
@@ -326,11 +329,12 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 			setReferenceGeodeticPosition(gpsMeas);
 
-			state(0) = 0; // -> Transform to NED Coordinates
+			// set Reference to zero
+			state(0) = 0; 
 			state(1) = 0;
 			state(2) = 0;
 
-			if (gpsVelocityInitial.size() == 3) {
+			if (false) { // for velocity when added
 				state(3) = gpsVelocityInitial(0);
 				state(4) = gpsVelocityInitial(1);
 				state(5) = gpsVelocityInitial(2);

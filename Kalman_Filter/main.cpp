@@ -86,7 +86,6 @@ struct CM_INS {
 /// <param name="ins"></param>
 IMU_Data imu_2_vimu(INS& ins, int row) {
 	Eigen::Quaternion<double> orientation = ins.ekf.getOrientation();
-
 	IMU_Data transformed_Data{ IMU_Data{} };
 
 	// Data Fusion Algorithms for Multiple IMUs
@@ -108,8 +107,7 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
 	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords())));
 
-
-	return transformed_Data;
+		return transformed_Data;
 }
 
 
@@ -133,7 +131,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
 
-	return;
+	
 
 	// Compute the mean of the GPS in Situ in the first GPS_Data Vector
 
@@ -207,20 +205,36 @@ void get_calibrated_meas(INS& ins) {
 	calibration::Calibration_Params mag_params = calibration_Params.magCali;
 
 	for (IMU_Data& data : ins.imuData) {
-		data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2 
+		data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2
+	/*	data.accelMeas *=  9.81 / 1e3;*/
 		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
 		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
 	}
 
 }
 
+struct Orientation_new {
+	Eigen::Quaternion<double> o_imu_0{ -0.398, 0.444, -0.769, 0.23 };
+	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
+	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
+	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
+} orient_new;
 
+struct Orientation_old {
+		Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
+	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
+	Eigen::Quaternion<double> o_imu_6{ -0.39807, -0.44399, 0.76902, 0.22983 };
+	Eigen::Quaternion<double> o_imu_7{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
+} orient_old;
 
 
 int main()
 {
 	// Flag fuer die Estimation Fusion
 	constexpr bool estimation_fusion = false;
+
+	// Flag fuer die Orientation
+	bool new_orientation = false;
 
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
@@ -233,7 +247,6 @@ int main()
 	// Define INS1
 	ins_1.imu_port = 0;
 	ins_1.ekf.setCoords(Eigen::Vector3d{ 6.7441, -1.5375, -53.0125 });
-	ins_1.ekf.setOrientation(Eigen::Quaternion<double>{ -0.398, 0.444, -0.769, 0.23 });
 	ins_1.ekf.setAccelBias(Eigen::Vector3d{ -4.31342161, -22.0591438, 29.0506018 });
 	ins_1.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.997624911, 0.00501776681, 0.0211610225, -0.00811466326, 0.986648117, 0.136514105, -0.0214393877, -0.138505947, 0.985038735).finished());
 	ins_1.ekf.setMagBias(Eigen::Vector3d
@@ -244,8 +257,7 @@ int main()
 
 	// Define INS2
 	ins_2.imu_port = 1;
-	ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 *1e3,75.4449*1e3 ,54.5905*1e3 });
-	ins_2.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.119, 0.444, 0.858});
+	ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 * 1e3,75.4449 * 1e3 ,54.5905 * 1e3 });
 	ins_2.ekf.setAccelBias(Eigen::Vector3d{ -3.1927911, -19.8014002, 5.25052353 });
 	ins_2.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592).finished());
 	ins_2.ekf.setMagBias(Eigen::Vector3d{ 6.847327, -22.258473, 54.19993 });
@@ -256,8 +268,7 @@ int main()
 
 	// Define INS3
 	ins_3.imu_port = 6;
-	ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838*1e3, -1.5375*1e3, -53.0125*1e3 });
-	ins_3.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398});
+	ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838 * 1e3, -1.5375 * 1e3, -53.0125 * 1e3 });
 	ins_3.ekf.setAccelBias(Eigen::Vector3d{ -3.00372421, -8.129569, 16.655453 });
 	ins_3.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779).finished());
 	ins_3.ekf.setMagBias(Eigen::Vector3d{ -13.293332, -8.99686, 0.35697 });
@@ -268,14 +279,27 @@ int main()
 
 	// Define INS4
 	ins_4.imu_port = 7;
-	ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521*1e3, -75.3151*1e3, 54.5905*1e3 }); // given in mm, conversion to m in ekf
-	ins_4.ekf.setOrientation(Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858});
+	ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521 * 1e3, -75.3151 * 1e3, 54.5905 * 1e3 }); // given in mm, conversion to m in ekf
 	ins_4.ekf.setAccelBias(Eigen::Vector3d{ 0.513195483, -6.38354307, 18.6818155 });
 	ins_4.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184).finished());
 	ins_4.ekf.setMagBias(Eigen::Vector3d{ 6.961981, -44.798494, 36.018804 });
 	ins_4.ekf.setMagTransformMatrix((Eigen::Matrix3d() << 0.919869, -0.063969, 0.036467, -0.063969, 1.003396, 0.002549, 0.036467, 0.002549, 1.048945).finished());
 	ins_4.ekf.setGyroBias(Eigen::Vector3d{ -0.04707186, 0.00766569, 0.00236872 });
 	ins_4.ekf.setGyroTransformMatrix((Eigen::Matrix3d() << 0.93908668, -0.0466796, -0.20330397, -0.13423415, 0.67620875, -0.33500868, 0.08244915, -0.28759273, 0.49361518).finished());
+
+	// set Orientation
+	if (new_orientation) {
+		ins_1.ekf.setOrientation(orient_new.o_imu_0);
+		ins_2.ekf.setOrientation(orient_new.o_imu_1);
+		ins_3.ekf.setOrientation(orient_new.o_imu_6);
+		ins_4.ekf.setOrientation(orient_new.o_imu_7);
+	}
+	else {
+		ins_1.ekf.setOrientation(orient_old.o_imu_0);
+		ins_2.ekf.setOrientation(orient_old.o_imu_1);
+		ins_3.ekf.setOrientation(orient_old.o_imu_6);
+		ins_4.ekf.setOrientation(orient_old.o_imu_7);
+	}
 
 
 
