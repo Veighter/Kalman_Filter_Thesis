@@ -83,13 +83,12 @@ private:
 	Eigen::Quaternion<double> orientation;
 
 	void setReferenceECEFPosition(Eigen::Vector3d& referenceGeodeticPosition) {
+		setRotationMatrixECEF2NED(referenceGeodeticPosition);
 		referenceECEFPosition = coordTransformer.geo_to_ecef(referenceGeodeticPosition);
-		//	setRotationMatrixECEF2NED(referenceGeodeticPosition);
-
 	}
 
 	Eigen::Vector3d computeECEF2NED(Eigen::Vector3d& geodeticPosition) {
-		setRotationMatrixECEF2NED(geodeticPosition);
+	
 		return rotationMatrix * (coordTransformer.geo_to_ecef(geodeticPosition) - referenceECEFPosition);
 		}
 

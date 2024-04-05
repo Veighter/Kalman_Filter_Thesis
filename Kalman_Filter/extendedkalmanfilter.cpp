@@ -109,7 +109,9 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
+		std::cout << "GYRO\n";
 	}
+	
 }
 
 // ist das noch ein Prediction Step oder ist das schon ein Update?? Evtl Funktion anpassen wie geht das hier?????
@@ -189,6 +191,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
+		std::cout << "ACC\n";
 
 	}
 	else {
@@ -196,7 +199,6 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		Eigen::VectorXd state;
 		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
 			state = Eigen::VectorXd::Zero(13);
-			
 		}
 		else {
 			state = getState();
@@ -205,12 +207,13 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		state(7) += accMeas(1);
 		state(8) += accMeas(2);
 
-		
+
 
 		updateMeasurementCount(0);
 
 		setState(state);
 	}
+	
 }
 
 void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
@@ -241,9 +244,9 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		R(1, 1) = 1;
 		R(2, 2) = 1;
 
-		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
-		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
-		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
 
 		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
 		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
@@ -259,6 +262,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
+		std::cout << "MAG\n";
 
 	}
 	else {
@@ -279,6 +283,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 		setState(state);
 	}
+	
 }
 
 // die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
@@ -297,23 +302,19 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		uint8_t initMeasurements = getMinInitMeasurementCount();
 
 		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2) < initMeasurements) {
+			Eigen::VectorXd state;
 			if (initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0 && initMeasurementCount(2) == 0) {
-				Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
-				state(0) = gpsMeas(0); //latitude
-				state(1) = gpsMeas(1); // longitude
-				state(2) = 0;
-
-				setState(state);
+				state = Eigen::VectorXd::Zero(13);
 			}
 			else {
-				Eigen::VectorXd state = getState();
-				state(0) += gpsMeas(0);
-				state(1) += gpsMeas(1);
-				state(2) += 0;
-
-				setState(state);
+				state = getState();
 			}
-			updateMeasurementCount(2); // Update propertie in Measurement Count for GPS measurement
+			state(0) += gpsMeas(0);
+			state(1) += gpsMeas(1);
+			state(2) += 0;
+
+			setState(state);
+			updateMeasurementCount(2); // Update property in Measurement Count for GPS measurement
 		}
 		else {
 			Eigen::VectorXd state = getState();
@@ -325,12 +326,12 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			gpsMeas(1) += state(1);
 			gpsMeas(2) += 0;
 
-			gpsMeas = gpsMeas / getInitMeasurementCount()(2); // mean of the init GPS Positions (Median is better, bc of outliers) Fix after!!!
+			gpsMeas = gpsMeas / (getInitMeasurementCount()(2)+1); // mean of the init GPS Positions (11th measurement for GPS)
 
 			setReferenceGeodeticPosition(gpsMeas);
 
 			// set Reference to zero
-			state(0) = 0; 
+			state(0) = 0;
 			state(1) = 0;
 			state(2) = 0;
 
@@ -348,7 +349,6 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			// Mean over acceleration init measurements
 			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
 			initAcc = initAcc / initMeasurementCount(0);
-
 
 			// Determine Pitch and Roll from Accelerometer
 			// compute pitch
@@ -371,10 +371,11 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			state(10) = initOrientation.x();
 			state(11) = initOrientation.y();
 			state(12) = initOrientation.z();
-
-			state(6) = 0;		// acceleration = 0, da erstmal von Ruhe bei der Initialisierung ausgegangen wird
-			state(7) = 0;
-			state(8) = 0;
+			
+			// init th acceleration
+			state(6) = initAcc(0);	
+			state(7) = initAcc(1);
+			state(8) = initAcc(2)+g;
 
 			//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3
 			// Fist Init of Covariane
@@ -437,8 +438,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		setState(state);
 		setCovariance(covariance);
-
-		//Update step -> to ecef -> to NED
+		std::cout << "GPS\n";
 	}
 
 }

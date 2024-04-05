@@ -1,4 +1,4 @@
-#define _USE_MATH_DEFINES
+ï»¿#define _USE_MATH_DEFINES
 
 #include <iostream>
 #include <fstream>
@@ -12,13 +12,11 @@
 // In welcher Einheit sind die Sekunden angegeben? Laut Abgabe in Microsekunden
 // alle 2 sekunden kommt ein GPS rein
 using namespace sensorMeas;
-constexpr int IMU_DATA_ROWS = 8851;
-constexpr int GPS_DATA_ROWS = 872;
+constexpr int IMU_DATA_ROWS = 8727;
+constexpr int GPS_DATA_ROWS = 870;
 constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
-
-constexpr int row_no_broken_time_data = 124;
 
 /// <summary>
 /// 
@@ -107,7 +105,7 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
 	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords())));
 
-		return transformed_Data;
+	return transformed_Data;
 }
 
 
@@ -131,39 +129,70 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
 
-	
 
-	// Compute the mean of the GPS in Situ in the first GPS_Data Vector
+	Eigen::Vector3d gps_holder; 
+	// Compute the mean of the GPS_Data Vector + Detection of Faulty Values in Longitude and Lattitude
+	std::vector<double> sorted_latitude = std::vector<double>(num_GPSs);
+	std::vector<double> sorted_longitude = std::vector<double>(num_GPSs);
 
+	double median_latitude{}, median_longitude{};
+
+	double std_GPS_geo = 0.0001;// approximately 11m accuracy , nearly standard deviation
 	for (int row = 0; row < GPS_DATA_ROWS; row++)
 	{
-		for (int gps_number = 1; gps_number < num_GPSs; gps_number++) {
+		gps_holder = Eigen::Vector3d::Zero();
 
-			centralized_ins.GPSData[0][row] += centralized_ins.GPSData[gps_number][row];
+		for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
+			sorted_latitude[gps_number] = centralized_ins.GPSData[gps_number][row](0);
+			sorted_longitude[gps_number] = centralized_ins.GPSData[gps_number][row](1);
 		}
 
-		// Pick the in Situ GPS Data Vector
+		std::sort(sorted_latitude.begin(), sorted_latitude.end());
+		std::sort(sorted_longitude.begin(), sorted_longitude.end());
+		if (num_GPSs % 2 == 0) {
+			median_latitude = (sorted_latitude[(num_GPSs / 2)-1]+sorted_latitude[num_GPSs/2])/2;
+			median_longitude = (sorted_longitude[(num_GPSs / 2)-1]+sorted_longitude[num_GPSs])/2;
+		}
+		else {
+			median_latitude = sorted_latitude[(num_GPSs / 2)];
+			median_longitude = sorted_longitude[(num_GPSs / 2)];
+		}
+
+
+
+
+		for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
+			if ((centralized_ins.GPSData[gps_number][row](0) - median_latitude) * (centralized_ins.GPSData[gps_number][row](0) - median_latitude) + (centralized_ins.GPSData[gps_number][row](1) - median_longitude) * (centralized_ins.GPSData[gps_number][row](1) - median_longitude) <= std_GPS_geo * std_GPS_geo * 2) {
+
+				gps_holder += centralized_ins.GPSData[gps_number][row];
+			}
+			else {
+				gps_holder += Eigen::Vector3d{ median_latitude, median_longitude,0 };
+			}
+		}
+		centralized_ins.GPSData[0][row] = gps_holder;	// Pick the in Situ GPS Data Vector
 		centralized_ins.GPSData[0][row] /= num_GPSs;
 	}
 
 
 	// Durchgehen der beiden Vektoren, erst wenn ich GPS habe, dann will ich auch erst die anderen Messungen sammeln
-
-	int row_imu = row_no_broken_time_data;
+	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
 	int row_gps = 0;
 
 	double time_start = cm_INS.timeDataGPS[0];
 
 	// wait for GPS
-	for (;; row_imu++) {
-		if (cm_INS.timeDataIMU[row_imu] >= time_start) {
-			break;
-		}
-	}
+	//for (;; row_imu++) {
+	//	if (cm_INS.timeDataIMU[row_imu] >= time_start) {
+	//		break;
+	//	}
+	//}
 	double dt_imu{}, dt_gps{};
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-		// Prediction Step
 
+		// richtige Zeit auswaehlen
+
+		// Prediction Step
 		double dt_imu = cm_INS.timeDataIMU[row_imu] - cm_INS.timeDataIMU[row_imu - (int)1];
 		cm_INS.ekf.predictionStep(cm_INS.centralized_imuData[row_imu].gyroMeas, dt_imu);
 
@@ -171,9 +200,9 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		cm_INS.ekf.updateAcc(cm_INS.centralized_imuData[row_imu].accelMeas, dt_imu);
 
 		cm_INS.ekf.updateMag(cm_INS.centralized_imuData[row_imu].magMeas, dt_imu);
-		row_imu++;
 
-		if (cm_INS.timeDataIMU[row_imu - (int)1] <= cm_INS.timeDataGPS[row_gps] <= cm_INS.timeDataIMU[row_imu]) {// was ist wenn es mehrere GPS Messungen in der Zeit der Aquirierung gibt??
+		int row_before = row_imu - 1;
+		if (cm_INS.timeDataIMU[row_before] < cm_INS.timeDataGPS[row_gps] && cm_INS.timeDataGPS[row_gps] < cm_INS.timeDataIMU[row_imu]) {// was ist wenn es mehrere GPS Messungen in der Zeit der Aquirierung gibt??
 
 			// Important for velocioty (if added)
 			if (row_gps > 0) {
@@ -184,8 +213,14 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 			cm_INS.ekf.updateGPS(centralized_ins.GPSData[0][row_gps], dt_gps);
 			row_gps++;
 
-			std::cout << "State: " << cm_INS.ekf.getState() << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
 		}
+
+		if (cm_INS.ekf.isInitialised()) {
+			std::cout << "State:\n " << cm_INS.ekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+		}
+		row_imu++;
+		row_before++;
+
 
 	}
 
@@ -206,7 +241,7 @@ void get_calibrated_meas(INS& ins) {
 
 	for (IMU_Data& data : ins.imuData) {
 		data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2
-	/*	data.accelMeas *=  9.81 / 1e3;*/
+		/*	data.accelMeas *=  9.81 / 1e3;*/
 		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
 		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
 	}
@@ -221,7 +256,7 @@ struct Orientation_new {
 } orient_new;
 
 struct Orientation_old {
-		Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
+	Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
 	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
 	Eigen::Quaternion<double> o_imu_6{ -0.39807, -0.44399, 0.76902, 0.22983 };
 	Eigen::Quaternion<double> o_imu_7{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
@@ -324,8 +359,8 @@ int main()
 
 		if (!data_IMU.is_open())
 		{
-			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
-			return 1; // Rückgabe eines Fehlercodes
+			std::cerr << "Fehler beim Ã–ffnen der Datei!" << std::endl;
+			return 1; // RÃ¼ckgabe eines Fehlercodes
 		}
 
 		for (std::string values; std::getline(data_IMU, values) && row < IMU_DATA_ROWS; row++)
@@ -342,7 +377,7 @@ int main()
 			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
 
 			// Time in seconds
-			ins->timeDataIMU[row] /= 1e3;
+			ins->timeDataIMU[row] /= 1e6; // 1e3; // convert from us -> s (ony for the old data, new is in ms 1e3
 
 
 		}
@@ -364,8 +399,8 @@ int main()
 
 		if (!data_GPS.is_open())
 		{
-			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
-			return 1; // Rückgabe eines Fehlercodes
+			std::cerr << "Fehler beim Ã–ffnen der Datei!" << std::endl;
+			return 1; // RÃ¼ckgabe eines Fehlercodes
 		}
 		row = 0;
 		for (std::string values; std::getline(data_GPS, values) && row < GPS_DATA_ROWS; row++)

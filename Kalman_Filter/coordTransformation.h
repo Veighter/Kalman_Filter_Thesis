@@ -82,6 +82,7 @@ public:
 		return ecef;     // Return x, y, z in ECEF
 	}
 
+	// Wikipedia??
 	Eigen::Matrix3d ecef_to_ned_RotationMatrix(Eigen::Vector3d& geo) {
 		double phi = geo[0] * M_PI / 180.0; // Latitude in radians
 		double lambda = geo[1] * M_PI / 180.0; // Longitude in radians
