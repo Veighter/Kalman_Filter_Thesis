@@ -130,7 +130,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 	}
 
 
-	Eigen::Vector3d gps_holder; 
+	Eigen::Vector3d gps_holder;
 	// Compute the mean of the GPS_Data Vector + Detection of Faulty Values in Longitude and Lattitude
 	std::vector<double> sorted_latitude = std::vector<double>(num_GPSs);
 	std::vector<double> sorted_longitude = std::vector<double>(num_GPSs);
@@ -150,8 +150,8 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		std::sort(sorted_latitude.begin(), sorted_latitude.end());
 		std::sort(sorted_longitude.begin(), sorted_longitude.end());
 		if (num_GPSs % 2 == 0) {
-			median_latitude = (sorted_latitude[(num_GPSs / 2)-1]+sorted_latitude[num_GPSs/2])/2;
-			median_longitude = (sorted_longitude[(num_GPSs / 2)-1]+sorted_longitude[num_GPSs])/2;
+			median_latitude = (sorted_latitude[(num_GPSs / 2) - 1] + sorted_latitude[num_GPSs / 2]) / 2;
+			median_longitude = (sorted_longitude[(num_GPSs / 2) - 1] + sorted_longitude[num_GPSs]) / 2;
 		}
 		else {
 			median_latitude = sorted_latitude[(num_GPSs / 2)];
@@ -268,12 +268,23 @@ int main()
 	// Flag fuer die Estimation Fusion
 	constexpr bool estimation_fusion = false;
 
+	double time_constant{};
+	std::string data_IMU_path{};
+
 	// Flag fuer die Orientation
 	bool new_orientation = false;
 
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
-	std::string data_IMU_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" };
+
+	if (new_orientation) {
+		time_constant = 1e3;
+		data_IMU_path= "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_" ;
+	}
+	else {
+		time_constant = 1e6;
+		data_IMU_path= "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" ;
+	}
 
 	// Time [us], Latitude [deg], Longitude Degree[deg] 
 	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
@@ -377,7 +388,7 @@ int main()
 			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
 
 			// Time in seconds
-			ins->timeDataIMU[row] /= 1e6; // 1e3; // convert from us -> s (ony for the old data, new is in ms 1e3
+			ins->timeDataIMU[row] /= time_constant; // convert from us -> s (ony for the old data, new is in ms 1e3
 
 
 		}

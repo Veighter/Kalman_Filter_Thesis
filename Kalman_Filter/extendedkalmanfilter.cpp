@@ -127,10 +127,12 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 
 		Eigen::Vector3d gMeas = accMeas;
-
-		// Correction for the gravity
-		gMeas(2) += g;
 		gMeas.normalize();
+
+		// Correction for the gravity	
+		accMeas(2) += g;
+		
+		
 
 		// Acc Correction, Measurement noise noch hinzufuegen [R]
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
@@ -345,25 +347,26 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 				state(4) = 0;
 				state(5) = 0;
 			}
-
+			// Only is valid, if the sensor is stationary!!!
 			// Mean over acceleration init measurements
 			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
 			initAcc = initAcc / initMeasurementCount(0);
 
-			// Determine Pitch and Roll from Accelerometer
+			// Determine Pitch and Roll from Accelerometer -> Elevation angle, has to be nearly zero
 			// compute pitch
 			double pitch = std::asin(initAcc(0) / g);
 
-			// compute roll 
-			double roll = std::atan2(initAcc(1), initAcc(2));
-
+			// compute roll -> turn/ bank angle, has also to be nearly zero
+			double param = initAcc(1) / initAcc(2);
+		
+			double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
 
 			// Mean over magnetometer init measurements
 			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
 			initMag = initMag / initMeasurementCount(1);
 
 			// Determine Yaw from magnetometer
-			double yaw = std::atan2(initMag(0), initMag(1));
+			double yaw = std::atan2(initMag(1), initMag(0)); //m_y/m_x ich
 
 			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
 
@@ -454,11 +457,12 @@ Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, d
 	Eigen::Matrix3d yaw = Eigen::Matrix3d::Zero();
 	yaw << std::cos(yaw), -std::sin(yaw), 0, std::sin(yaw), std::cos(yaw), 0, 0, 0, 1;*/
 
+
 	double y_c = std::cos(yaw / 2);
 	double y_s = std::sin(yaw / 2);
 	double p_c = std::cos(pitch / 2);
 	double p_s = std::sin(pitch / 2);
-	double r_c = std::sin(roll / 2);
+	double r_c = std::cos(roll / 2);
 	double r_s = std::sin(roll / 2);
 
 	Eigen::Quaternion<double> q = Eigen::Quaternion<double>::Identity();
@@ -466,6 +470,8 @@ Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, d
 	q.x() = y_c * p_c * r_s - y_s * p_s * r_c;
 	q.y() = y_c * p_s * r_c + y_s * p_c * r_s;
 	q.z() = y_s * p_c * r_c - y_c * p_s * r_s;
+
+	q.normalize();
 
 	return q;
 }
