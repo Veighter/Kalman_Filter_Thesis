@@ -18,6 +18,11 @@ constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
 
+// reference values to detect outliers simple way
+constexpr double ref_lat = 51.0
+constexpr double ref_long = 7.0
+
+
 /// <summary>
 /// 
 /// </summary>
@@ -97,13 +102,14 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 	Eigen::Vector3d psi_dot_dot;
 	psi_dot_dot.setZero();
-	// Computation of Angular acceleration
+	int row_before = row - 1;
+	// Computation of Angular acceleration of the VIMU!! 
 	if (1 <= row) {
-		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row - 1].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row - 1]);
+		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row_before].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row_before]);
 	}
 
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
-	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords())));
+	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas);//- orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords()))); --> whats the matter with the angular acceleration correction??
 
 	return transformed_Data;
 }
@@ -128,51 +134,71 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].gyroMeas /= num_IMUs;
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
-
-
-	Eigen::Vector3d gps_holder;
-	// Compute the mean of the GPS_Data Vector + Detection of Faulty Values in Longitude and Lattitude
-	std::vector<double> sorted_latitude = std::vector<double>(num_GPSs);
-	std::vector<double> sorted_longitude = std::vector<double>(num_GPSs);
-
-	double median_latitude{}, median_longitude{};
-
-	double std_GPS_geo = 0.0001;// approximately 11m accuracy , nearly standard deviation
-	for (int row = 0; row < GPS_DATA_ROWS; row++)
-	{
-		gps_holder = Eigen::Vector3d::Zero();
+	
+	Eigen::Vector3d centralized_gps;
+	for (int row = 0; row < GPS_DATA_ROWS; row++) {
+		centralized_gps = = Eigen::Vector3d::Zero();
 
 		for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
-			sorted_latitude[gps_number] = centralized_ins.GPSData[gps_number][row](0);
-			sorted_longitude[gps_number] = centralized_ins.GPSData[gps_number][row](1);
-		}
-
-		std::sort(sorted_latitude.begin(), sorted_latitude.end());
-		std::sort(sorted_longitude.begin(), sorted_longitude.end());
-		if (num_GPSs % 2 == 0) {
-			median_latitude = (sorted_latitude[(num_GPSs / 2) - 1] + sorted_latitude[num_GPSs / 2]) / 2;
-			median_longitude = (sorted_longitude[(num_GPSs / 2) - 1] + sorted_longitude[num_GPSs]) / 2;
-		}
-		else {
-			median_latitude = sorted_latitude[(num_GPSs / 2)];
-			median_longitude = sorted_longitude[(num_GPSs / 2)];
-		}
-
-
-
-
-		for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
-			if ((centralized_ins.GPSData[gps_number][row](0) - median_latitude) * (centralized_ins.GPSData[gps_number][row](0) - median_latitude) + (centralized_ins.GPSData[gps_number][row](1) - median_longitude) * (centralized_ins.GPSData[gps_number][row](1) - median_longitude) <= std_GPS_geo * std_GPS_geo * 2) {
-
-				gps_holder += centralized_ins.GPSData[gps_number][row];
+			// latitude check
+			if (centralized_ins.GPSData[gps_number][row](0) - ref_lat < 1) {
+				centralized_gps(0) += centralized_ins.GPSData[gps_number][row](0);
 			}
-			else {
-				gps_holder += Eigen::Vector3d{ median_latitude, median_longitude,0 };
+			if (centralized_ins.GPSData[gps_number][row](1) - ref_long < 1) {
+				centralized_gps(1) += centralized_ins[gps_number][row](1);
 			}
 		}
-		centralized_ins.GPSData[0][row] = gps_holder;	// Pick the in Situ GPS Data Vector
+		centralized_ins.GPSData[0][row] = centralized_gps;
 		centralized_ins.GPSData[0][row] /= num_GPSs;
 	}
+	
+	
+
+
+
+	//Eigen::Vector3d gps_holder;
+	//// Compute the mean of the GPS_Data Vector + Detection of Faulty Values in Longitude and Lattitude
+	//std::vector<double> sorted_latitude = std::vector<double>(num_GPSs);
+	//std::vector<double> sorted_longitude = std::vector<double>(num_GPSs);
+
+	//double median_latitude{}, median_longitude{};
+
+	//double std_GPS_geo = 0.0001;// approximately 11m accuracy , nearly standard deviation
+	//for (int row = 0; row < GPS_DATA_ROWS; row++)
+	//{
+	//	gps_holder = Eigen::Vector3d::Zero();
+
+	//	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
+	//		sorted_latitude[gps_number] = centralized_ins.GPSData[gps_number][row](0);
+	//		sorted_longitude[gps_number] = centralized_ins.GPSData[gps_number][row](1);
+	//	}
+
+	//	std::sort(sorted_latitude.begin(), sorted_latitude.end());
+	//	std::sort(sorted_longitude.begin(), sorted_longitude.end());
+	//	if (num_GPSs % 2 == 0) {
+	//		median_latitude = (sorted_latitude[(num_GPSs / 2) - 1] + sorted_latitude[num_GPSs / 2]) / 2;
+	//		median_longitude = (sorted_longitude[(num_GPSs / 2) - 1] + sorted_longitude[num_GPSs]) / 2;
+	//	}
+	//	else {
+	//		median_latitude = sorted_latitude[(num_GPSs / 2)];
+	//		median_longitude = sorted_longitude[(num_GPSs / 2)];
+	//	}
+
+
+
+
+	//	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
+	//		if ((centralized_ins.GPSData[gps_number][row](0) - median_latitude) * (centralized_ins.GPSData[gps_number][row](0) - median_latitude) + (centralized_ins.GPSData[gps_number][row](1) - median_longitude) * (centralized_ins.GPSData[gps_number][row](1) - median_longitude) <= std_GPS_geo * std_GPS_geo * 2) {
+
+	//			gps_holder += centralized_ins.GPSData[gps_number][row];
+	//		}
+	//		else {
+	//			gps_holder += Eigen::Vector3d{ median_latitude, median_longitude,0 };
+	//		}
+	//	}
+	//	centralized_ins.GPSData[0][row] = gps_holder;	// Pick the in Situ GPS Data Vector
+	//	centralized_ins.GPSData[0][row] /= num_GPSs;
+	//}
 
 
 	// Durchgehen der beiden Vektoren, erst wenn ich GPS habe, dann will ich auch erst die anderen Messungen sammeln
@@ -199,7 +225,10 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		// Update Step
 		cm_INS.ekf.updateAcc(cm_INS.centralized_imuData[row_imu].accelMeas, dt_imu);
 
-		cm_INS.ekf.updateMag(cm_INS.centralized_imuData[row_imu].magMeas, dt_imu);
+		// MAG only used for initialisation process
+		if (!cm_INS.ekf.isInitialised()) {
+			cm_INS.ekf.updateMag(cm_INS.centralized_imuData[row_imu].magMeas, dt_imu);
+		}
 
 		int row_before = row_imu - 1;
 		if (cm_INS.timeDataIMU[row_before] < cm_INS.timeDataGPS[row_gps] && cm_INS.timeDataGPS[row_gps] < cm_INS.timeDataIMU[row_imu]) {// was ist wenn es mehrere GPS Messungen in der Zeit der Aquirierung gibt??
@@ -216,6 +245,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		}
 
 		if (cm_INS.ekf.isInitialised()) {
+			std::cout << "Zeit: " << cm_INS.timeDataIMU[row_imu] << std::endl;
 			std::cout << "State:\n " << cm_INS.ekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
 		}
 		row_imu++;
@@ -279,11 +309,11 @@ int main()
 
 	if (new_orientation) {
 		time_constant = 1e3;
-		data_IMU_path= "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_" ;
+		data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_";
 	}
 	else {
 		time_constant = 1e6;
-		data_IMU_path= "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_" ;
+		data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_";
 	}
 
 	// Time [us], Latitude [deg], Longitude Degree[deg] 

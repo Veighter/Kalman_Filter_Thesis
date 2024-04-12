@@ -21,7 +21,16 @@ namespace calibration {
 		Calibration_Params gyroCali;
 		Calibration_Params magCali;
 	};
+
+
 }
+
+enum Sensortype {
+	gyroscope,
+	accelerometer,
+	magnetometer,
+	gps
+};
 
 class ExtendedKalmanFilter {
 public:
@@ -65,6 +74,8 @@ public:
 	void updateMag(Eigen::Vector3d magMeas, double dt);
 	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
 
+	bool isValid(Sensortype sensor);
+
 private:
 	bool init, calibrated;
 	uint8_t minInitMeasurements = 10;
@@ -95,8 +106,4 @@ private:
 	void setRotationMatrixECEF2NED (Eigen::Vector3d& geodeticPosition){
 		rotationMatrix = coordTransformer.ecef_to_ned_RotationMatrix(geodeticPosition);
 	}
-
-	
-
-
 };

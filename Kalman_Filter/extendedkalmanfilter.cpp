@@ -5,7 +5,7 @@
 constexpr double ACCEL_STD = 1.0;
 constexpr double GYRO_STD = 0.1 / 180.0 * M_PI;
 constexpr double MAG_STD = 1.0;
-constexpr double GPS_POS_STD = 3.0;
+constexpr double GPS_POS_STD =3.0;
 
 // Initial standard derivation has to be high, bc we dont know exactly what they are
 constexpr double INIT_VEL_STD = 10.0;
@@ -13,6 +13,9 @@ constexpr double INIT_ORIENTATION_VAR = 0.125;
 constexpr double INIT_ORIENTATION_COVAR = 0.0003;
 
 constexpr double g = 9.81;
+
+// magnetic-declination.com: Location is Halter with 3 degree and 11 sec = 3.1833 degree
+constexpr double declinationAngle = 3.1833 * M_PI / 180.0;
 
 
 
@@ -31,13 +34,20 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		double x_dot_dot = state(6);
 		double y_dot_dot = state(7);
 		double z_dot_dot = state(8);
-		double psi_x_dot = gyroMeas(0);
-		double psi_y_dot = gyroMeas(1);
-		double psi_z_dot = gyroMeas(2);
 		double q_0 = state(9);
 		double q_1 = state(10);
 		double q_2 = state(11);
 		double q_3 = state(12);
+
+		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
+	
+		// Conversion from ("body") XYD -> ("local") NED
+		gyroMeas = orientation._transformVector(gyroMeas);
+
+		double psi_x_dot = gyroMeas(0);
+		double psi_y_dot = gyroMeas(1);
+		double psi_z_dot = gyroMeas(2);
+	
 
 
 		//// Predict position
@@ -124,7 +134,10 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
-
+		
+		//Conversion from ("body") XYD -> ("local") NED
+		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ state(9), state(10), state(11), state(12) };
+		accMeas = orientation._transformVector(accMeas);
 
 		Eigen::Vector3d gMeas = accMeas;
 		gMeas.normalize();
@@ -231,11 +244,18 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		double q_2 = state(11);
 		double q_3 = state(12);
 
+	
 		// Magnet is in north direction, only x directed 
+
+		// Correction seems a bit of, mag_hat has to be in x-axis of the ned! But what does that mean for now?
 		mag_hat(0) = q_0 * q_0 + q_1 * q_1 - q_2 * q_2 - q_3 * q_3;
 		mag_hat(1) = 2 * q_1 * q_2 - 2 * q_0 * q_3;
-		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
+		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2; 
 
+		// where do i put the declination angle? ("Angle between magnetic and true north")
+
+		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
+		magMeas = orientation._transformVector(magMeas);
 		magMeas.normalize();
 		Eigen::Vector3d y = magMeas - mag_hat;
 
@@ -361,12 +381,15 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		
 			double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
 
-			// Mean over magnetometer init measurements
+			// Mean over magnetometer init measurements [with "Angle of Magnetic Declination" - Angle between magnetic and true north]
 			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
 			initMag = initMag / initMeasurementCount(1);
 
 			// Determine Yaw from magnetometer
 			double yaw = std::atan2(initMag(1), initMag(0)); //m_y/m_x ich
+	
+			
+			yaw += declinationAngle;
 
 			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
 
@@ -375,7 +398,9 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			state(11) = initOrientation.y();
 			state(12) = initOrientation.z();
 			
-			// init th acceleration
+			// init the acceleration with the first Orientation from ("Body") XYD -> ("local") NED
+			initAcc = initOrientation._transformVector(initAcc);
+
 			state(6) = initAcc(0);	
 			state(7) = initAcc(1);
 			state(8) = initAcc(2)+g;
@@ -418,6 +443,8 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		// GPS in NED locally Coordinates
 		gpsMeas = computeECEF2NED(gpsMeas);
+
+
 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
@@ -474,6 +501,11 @@ Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, d
 	q.normalize();
 
 	return q;
+}
+
+// Maha.... Distance check for incoming Measurement, if its to wide outlying -> not what we expect, primaryly GPS
+bool ExtendedKalmanFilter::isValid(Sensortype sensor) {
+	return false;
 }
 
 
