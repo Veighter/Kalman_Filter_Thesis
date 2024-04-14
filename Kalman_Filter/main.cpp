@@ -18,9 +18,13 @@ constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
 
+// Flag fuer die Estimation Fusion
+constexpr bool estimation_fusion = false;
+
+
 // reference values to detect outliers simple way
-constexpr double ref_lat = 51.0
-constexpr double ref_long = 7.0
+constexpr double ref_lat = 51.0;
+constexpr double ref_long = 7.0;
 
 
 /// <summary>
@@ -82,6 +86,33 @@ struct CM_INS {
 }cm_INS;
 
 
+Eigen::Vector3d transformGyro(const Eigen::Vector3d& gyroMeas, const Eigen::Quaternion<double>& orientation) {
+	return orientation._transformVector(gyroMeas);
+}
+
+Eigen::Vector3d transformMag(const Eigen::Vector3d& magMeas, const Eigen::Quaternion<double>& orientation) {
+	Eigen::Vector3d transformed_magMeas = magMeas;
+	transformed_magMeas(1) *= -1;
+	transformed_magMeas(2) *= -1;
+	return orientation._transformVector(transformed_magMeas);
+}
+
+Eigen::Vector3d transformAccel(int row, const INS& ins, const Eigen::Quaternion<double>& orientation) {
+	Eigen::Vector3d psi_dot_dot;
+	psi_dot_dot.setZero();
+
+	int row_before = row - 1;
+
+	if (1 <= row) {
+		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row_before].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row_before]);
+	}
+
+	return orientation._transformVector(ins.imuData[row].accelMeas);
+	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
+	// return orientation._transformVector(imuData.accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(imuData.gyroMeas.cross(imuData.gyroMeas.cross(ins.ekf.getCoords())));
+}
+
+
 //
 /// <summary>
 /// Transforms the measurements of the INS IMU Information at position distinct from Center Of Mass to VIMU Values in Center of Mass
@@ -89,31 +120,36 @@ struct CM_INS {
 /// <param name="ins"></param>
 IMU_Data imu_2_vimu(INS& ins, int row) {
 	Eigen::Quaternion<double> orientation = ins.ekf.getOrientation();
+
 	IMU_Data transformed_Data{ IMU_Data{} };
 
-	// Data Fusion Algorithms for Multiple IMUs
-	transformed_Data.gyroMeas = orientation._transformVector(ins.imuData[row].gyroMeas);
-
-	// Mag Body Frame NED to ACC und Gyro Frame Orientation (without quaternion) -> is it Right??
-	ins.imuData[row].magMeas(1) *= -1;
-	ins.imuData[row].magMeas(2) *= -1;
-	transformed_Data.magMeas = orientation._transformVector(ins.imuData[row].magMeas);
-
-
-	Eigen::Vector3d psi_dot_dot;
-	psi_dot_dot.setZero();
-	int row_before = row - 1;
-	// Computation of Angular acceleration of the VIMU!! 
-	if (1 <= row) {
-		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row_before].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row_before]);
-	}
-
-	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
-	transformed_Data.accelMeas = orientation._transformVector(ins.imuData[row].accelMeas);//- orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(ins.imuData[row].gyroMeas.cross(ins.imuData[row].gyroMeas.cross(ins.ekf.getCoords()))); --> whats the matter with the angular acceleration correction??
+	transformed_Data.gyroMeas = transformGyro(ins.imuData[row].gyroMeas, orientation);
+	transformed_Data.magMeas = transformMag(ins.imuData[row].magMeas, orientation);
+	transformed_Data.accelMeas = transformAccel(row, ins, orientation);
 
 	return transformed_Data;
 }
 
+void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
+	double sampleTime = 1000000; // 1 ms
+
+	double dt_imu{}, dt_gps{};
+
+
+	// jeder einzelne Sensor schaetzt seinen Zustand in sich selbst (nach transformieren in den Rahmen der VIMU)
+	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
+	// zustand aller imus wird zu dem der VIMU\
+
+	int row_imu = 0, row_gps = 0;
+	
+	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
+	
+		for (INS* ins : centralized_ins.inss) {
+		//	ins->ekf.predictionStep(ins->timeDataIMU[row_imu])
+		}
+
+	}
+}
 
 void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 
@@ -136,20 +172,26 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 	}
 	
 	Eigen::Vector3d centralized_gps;
+	int gps_counter_lat{}, gps_counter_long{};
 	for (int row = 0; row < GPS_DATA_ROWS; row++) {
-		centralized_gps = = Eigen::Vector3d::Zero();
+		centralized_gps = Eigen::Vector3d::Zero();
+		gps_counter_lat = 0;
+		gps_counter_long = 0;
 
 		for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 			// latitude check
-			if (centralized_ins.GPSData[gps_number][row](0) - ref_lat < 1) {
+			if (abs(centralized_ins.GPSData[gps_number][row](0) - ref_lat) < 1) {
 				centralized_gps(0) += centralized_ins.GPSData[gps_number][row](0);
+				gps_counter_lat++;
 			}
-			if (centralized_ins.GPSData[gps_number][row](1) - ref_long < 1) {
-				centralized_gps(1) += centralized_ins[gps_number][row](1);
+			if (abs(centralized_ins.GPSData[gps_number][row](1) - ref_long) < 1) {
+				centralized_gps(1) += centralized_ins.GPSData[gps_number][row](1);
+				gps_counter_long++;
 			}
 		}
 		centralized_ins.GPSData[0][row] = centralized_gps;
-		centralized_ins.GPSData[0][row] /= num_GPSs;
+		centralized_ins.GPSData[0][row](0) /= gps_counter_lat;
+		centralized_ins.GPSData[0][row](1) /= gps_counter_long;
 	}
 	
 	
@@ -213,10 +255,12 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 	//		break;
 	//	}
 	//}
+
+	std::ofstream state_writer{};
+	Eigen::VectorXd state;
+
 	double dt_imu{}, dt_gps{};
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-
-		// richtige Zeit auswaehlen
 
 		// Prediction Step
 		double dt_imu = cm_INS.timeDataIMU[row_imu] - cm_INS.timeDataIMU[row_imu - (int)1];
@@ -245,6 +289,19 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		}
 
 		if (cm_INS.ekf.isInitialised()) {
+
+			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time.txt", std::ios_base::app);
+			state_writer << cm_INS.timeDataIMU[row_imu] << "\n";
+			state_writer.close();
+
+			state = cm_INS.ekf.getState();
+			
+			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz.txt", std::ios_base::app);
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer.close();
+
+
+			
 			std::cout << "Zeit: " << cm_INS.timeDataIMU[row_imu] << std::endl;
 			std::cout << "State:\n " << cm_INS.ekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
 		}
@@ -295,9 +352,7 @@ struct Orientation_old {
 
 int main()
 {
-	// Flag fuer die Estimation Fusion
-	constexpr bool estimation_fusion = false;
-
+	
 	double time_constant{};
 	std::string data_IMU_path{};
 
@@ -471,7 +526,8 @@ int main()
 	}
 	// Estimation Fusion
 	if (estimation_fusion) {
-
+		// Transformieren erst zu einem Abtastzeitpunkt
+		multiple_imu_fusion_estimation(cm_INS);
 	}
 
 
