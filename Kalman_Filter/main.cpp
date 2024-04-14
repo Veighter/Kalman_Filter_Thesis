@@ -140,13 +140,42 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
 	// zustand aller imus wird zu dem der VIMU\
 
-	int row_imu = 0, row_gps = 0;
-	
+	int row_imu = 0, row_gps = 0, row_before = 0;
+
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-	
+
 		for (INS* ins : centralized_ins.inss) {
-		//	ins->ekf.predictionStep(ins->timeDataIMU[row_imu])
+			dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
+			ins->ekf.predictionStep(ins->imuData[row_imu].gyroMeas, dt_imu);
+
+			ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt_imu);
+
+			// MAG only used for initialisation process
+			if (!ins->ekf.isInitialised()) {
+				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt_imu);
+			}
 		}
+
+		row_before = row_imu - 1;
+
+		if (cm_INS.timeDataIMU[row_before] < cm_INS.timeDataGPS[row_gps] && cm_INS.timeDataGPS[row_gps] < cm_INS.timeDataIMU[row_imu]) {
+
+			if (row_gps > 0) {
+				dt_gps = cm_INS.timeDataGPS[row_gps] - cm_INS.timeDataGPS[row_gps - (int)1];
+			}
+			else { dt_gps = 0; }
+
+			// verschieben der GPS Position um Position im Konstrukt TODO, im extended Kalmanfilter
+			for (INS* ins : cm_INS.inss) {
+				ins->ekf.updateGPS(GPSMeas, dt_gps);
+			}
+
+		}
+
+
+		row_imu++;
+
+
 
 	}
 }
@@ -170,7 +199,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.centralized_imuData[row].gyroMeas /= num_IMUs;
 		centralized_ins.centralized_imuData[row].magMeas /= num_IMUs;
 	}
-	
+
 	Eigen::Vector3d centralized_gps;
 	int gps_counter_lat{}, gps_counter_long{};
 	for (int row = 0; row < GPS_DATA_ROWS; row++) {
@@ -193,8 +222,8 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		centralized_ins.GPSData[0][row](0) /= gps_counter_lat;
 		centralized_ins.GPSData[0][row](1) /= gps_counter_long;
 	}
-	
-	
+
+
 
 
 
@@ -295,13 +324,13 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 			state_writer.close();
 
 			state = cm_INS.ekf.getState();
-			
+
 			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz.txt", std::ios_base::app);
 			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
 
-			
+
 			std::cout << "Zeit: " << cm_INS.timeDataIMU[row_imu] << std::endl;
 			std::cout << "State:\n " << cm_INS.ekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
 		}
@@ -352,7 +381,7 @@ struct Orientation_old {
 
 int main()
 {
-	
+
 	double time_constant{};
 	std::string data_IMU_path{};
 

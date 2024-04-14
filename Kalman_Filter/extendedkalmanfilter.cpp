@@ -340,7 +340,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		}
 		else {
 			Eigen::VectorXd state = getState();
-
+			Eigen::Vector3d coords = getCoords();
 
 
 			// Mean (better Median) of the measurements
@@ -352,10 +352,11 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 			setReferenceGeodeticPosition(gpsMeas);
 
-			// set Reference to zero
-			state(0) = 0;
-			state(1) = 0;
-			state(2) = 0;
+			// set Reference to zero + the Coords of the (V)IMU in the construct
+
+			state(0) = 0+coords(0);
+			state(1) = 0+coords(1);
+			state(2) = 0+coords(2);
 
 			if (false) { // for velocity when added
 				state(3) = gpsVelocityInitial(0);
@@ -441,9 +442,9 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
 
-		// GPS in NED locally Coordinates
-		gpsMeas = computeECEF2NED(gpsMeas);
-
+		// GPS in NED locally Coordinates at Position of the (V)IMU
+		gpsMeas = computeECEF2NED(gpsMeas)+getCoord();
+		
 
 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
