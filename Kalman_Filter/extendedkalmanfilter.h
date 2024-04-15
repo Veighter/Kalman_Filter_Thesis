@@ -90,7 +90,7 @@ private:
 
 	calibration::IMU_Calibration calibrationParams;
 
-	Eigen::Vector3d coords; // coordinates in m (maybe geodetic)
+	Eigen::Vector3d coords; // coordinates in mm relativ to the VIMU in the construct
 	Eigen::Quaternion<double> orientation;
 
 	void setReferenceECEFPosition(Eigen::Vector3d& referenceGeodeticPosition) {

@@ -86,30 +86,30 @@ struct CM_INS {
 }cm_INS;
 
 
-Eigen::Vector3d transformGyro(const Eigen::Vector3d& gyroMeas, const Eigen::Quaternion<double>& orientation) {
+Eigen::Vector3d transform_Gyro(const Eigen::Vector3d& gyroMeas, const Eigen::Quaternion<double>& orientation) {
 	return orientation._transformVector(gyroMeas);
 }
 
-Eigen::Vector3d transformMag(const Eigen::Vector3d& magMeas, const Eigen::Quaternion<double>& orientation) {
+Eigen::Vector3d transform_Mag(const Eigen::Vector3d& magMeas, const Eigen::Quaternion<double>& orientation) {
 	Eigen::Vector3d transformed_magMeas = magMeas;
 	transformed_magMeas(1) *= -1;
 	transformed_magMeas(2) *= -1;
 	return orientation._transformVector(transformed_magMeas);
 }
 
-Eigen::Vector3d transformAccel(int row, const INS& ins, const Eigen::Quaternion<double>& orientation) {
+Eigen::Vector3d transform_Acc(int row, const INS& ins, const Eigen::Quaternion<double>& orientation) {
 	Eigen::Vector3d psi_dot_dot;
 	psi_dot_dot.setZero();
 
 	int row_before = row - 1;
-
+ 
 	if (1 <= row) {
 		psi_dot_dot = (ins.imuData[row].accelMeas - ins.imuData[row_before].accelMeas) / (ins.timeDataIMU[row] - ins.timeDataIMU[row_before]);
 	}
 
 	return orientation._transformVector(ins.imuData[row].accelMeas);
 	// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
-	// return orientation._transformVector(imuData.accelMeas) - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(imuData.gyroMeas.cross(imuData.gyroMeas.cross(ins.ekf.getCoords())));
+//	 return imuData.accelMeas - orientation._transformVector(psi_dot_dot.cross(ins.ekf.getCoords())) - orientation._transformVector(imuData.gyroMeas.cross(imuData.gyroMeas.cross(ins.ekf.getCoords())));
 }
 
 
@@ -123,9 +123,9 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 	IMU_Data transformed_Data{ IMU_Data{} };
 
-	transformed_Data.gyroMeas = transformGyro(ins.imuData[row].gyroMeas, orientation);
-	transformed_Data.magMeas = transformMag(ins.imuData[row].magMeas, orientation);
-	transformed_Data.accelMeas = transformAccel(row, ins, orientation);
+	transformed_Data.gyroMeas = transform_Gyro(ins.imuData[row].gyroMeas, orientation);
+	transformed_Data.magMeas = transform_Mag(ins.imuData[row].magMeas, orientation);
+	transformed_Data.accelMeas = transform_Acc(row, ins, orientation);
 
 	return transformed_Data;
 }
@@ -141,22 +141,36 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 	// zustand aller imus wird zu dem der VIMU\
 
 	int row_imu = 0, row_gps = 0, row_before = 0;
+	bool init = false;
+
+	Eigen::Quaternion<double> orientation_imu = Eigen::Quaternion<double>{ 0,0,0,0 };
 
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-
+		
+		// Update the IMU extended Kalman filter with the values rotated in the virtual IMU frame in the Center of Mass
 		for (INS* ins : centralized_ins.inss) {
+			orientation_imu = ins->ekf.getOrientation();
+			
 			dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
-			ins->ekf.predictionStep(ins->imuData[row_imu].gyroMeas, dt_imu);
+			ins->ekf.predictionStep(transform_Gyro(ins->imuData[row_imu].gyroMeas, orientation_imu), dt_imu);
 
-			ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt_imu);
+			ins->ekf.updateAcc(transform_Acc(row_imu,*ins,orientation_imu), dt_imu);
 
 			// MAG only used for initialisation process
 			if (!ins->ekf.isInitialised()) {
-				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt_imu);
+				ins->ekf.updateMag(transform_Mag(ins->imuData[row_imu].magMeas,orientation_imu), dt_imu);
 			}
 		}
 
 		row_before = row_imu - 1;
+
+		// durchlaufen der init abfrage der ins
+		if (!init) {
+			init = true;
+			for (INS* ins : cm_INS.inss) {
+				init = init && ins->ekf.isInitialised();
+			}
+		}
 
 		if (cm_INS.timeDataIMU[row_before] < cm_INS.timeDataGPS[row_gps] && cm_INS.timeDataGPS[row_gps] < cm_INS.timeDataIMU[row_imu]) {
 
@@ -165,20 +179,45 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 			}
 			else { dt_gps = 0; }
 
-			// verschieben der GPS Position um Position im Konstrukt TODO, im extended Kalmanfilter
-			for (INS* ins : cm_INS.inss) {
-				ins->ekf.updateGPS(GPSMeas, dt_gps);
+			// verschieben der GPS Position um Position im Konstrukt 
+							// Mitteln der Werte, um die Fusion in dem Punkt zu machen
+			// GPS Fusion in VIMU and not in the IMUs itself
+			if (init) {
+				for (INS* ins : centralized_ins.inss) {
+					cm_INS.ekf.setState(cm_INS.ekf.getState() + ins->ekf.getState());
+				}
+				cm_INS.ekf.setState(cm_INS.ekf.getState() / num_IMUs);
+				cm_INS.ekf.updateGPS(cm_INS.GPSData[0][row_gps], dt_gps);
+
+				// Update the central state in the IMU state
+				// What states have to be updated? All or position only?
+				for (INS* ins : centralized_ins.inss)
+				{
+					///
+
+				}
+
+
 			}
+			else {
+				for (INS* ins : cm_INS.inss)
+				{
+					ins->ekf.updateGPS(cm_INS.GPSData[0][row_gps], dt_gps);
 
+				}
+			}
 		}
-
-
-		row_imu++;
-
-
+		row_gps++;
 
 	}
+
+
+	row_imu++;
+
+
+
 }
+
 
 void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 

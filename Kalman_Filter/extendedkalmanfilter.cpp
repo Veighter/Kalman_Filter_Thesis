@@ -443,7 +443,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		Eigen::MatrixXd covariance = getCovariance();
 
 		// GPS in NED locally Coordinates at Position of the (V)IMU
-		gpsMeas = computeECEF2NED(gpsMeas)+getCoord();
+		gpsMeas = computeECEF2NED(gpsMeas)+getCoords();
 		
 
 
