@@ -136,6 +136,7 @@
     <ClInclude Include="extendedkalmanfilter.h" />
     <ClInclude Include="coordTransformation.h" />
     <ClInclude Include="sensors.h" />
+    <ClInclude Include="vimuextendedkalmanfilter.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_1\GPS_1_data.txt" />

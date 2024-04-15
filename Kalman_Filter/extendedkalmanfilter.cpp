@@ -475,7 +475,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 }
 // sequence is ZYX -> Yaw, Pitch, Roll : Is it adaequat?? 1 of 12 possibilities
 // Quaternion & Rotation Sequences p.167
-Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, double pitch, double roll) {
+Eigen::Quaternion<double> ExtendedKalmanFilterBase::computeOrientation(double yaw, double pitch, double roll) {
 	/*Eigen::Matrix3d roll = Eigen::Matrix3d::Zero();
 	roll << 1, 0, 0, 0, std::cos(roll), -std::sin(roll), 0, std::sin(roll), std::cos(roll);
 
@@ -505,7 +505,7 @@ Eigen::Quaternion<double> ExtendedKalmanFilter::computeOrientation(double yaw, d
 }
 
 // Maha.... Distance check for incoming Measurement, if its to wide outlying -> not what we expect, primaryly GPS
-bool ExtendedKalmanFilter::isValid(Sensortype sensor) {
+bool ExtendedKalmanFilterBase::isValid(Sensortype sensor) {
 	return false;
 }
 

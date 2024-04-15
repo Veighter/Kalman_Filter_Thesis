@@ -38,6 +38,9 @@
     <ClInclude Include="coordTransformation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="vimuextendedkalmanfilter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\IMU_0\IMU_0_data.txt">
