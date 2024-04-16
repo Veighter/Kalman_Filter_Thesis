@@ -232,6 +232,8 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 	std::vector<Eigen::Quaternion<double>> VIMU_Orientations=std::vector<Eigen::Quaternion<double>>();
 	std::vector<Eigen::Vector3d> VIMU_Coords = std::vector<Eigen::Vector3d>();
 
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+
 	for (INS* ins : centralized_ins.inss) {
 		VIMU_Orientations.push_back(ins->ekf.getOrientation());
 		VIMU_Coords.push_back(ins->ekf.getCoords());
@@ -244,7 +246,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
 
 		// Prediction Step
-		double dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
 			// Append gyro meas of each imu to vector
 		for (INS* ins : centralized_ins.inss) {
 			meas.push_back(ins->imuData[row_imu].gyroMeas);
@@ -305,10 +307,11 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
+			if (state(0) > 1000 || state(1) > 1000) {
 
-
-			std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
-			std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			}
 		}
 		meas.clear();
 		row_imu++;

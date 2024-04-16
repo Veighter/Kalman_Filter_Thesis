@@ -34,7 +34,7 @@ enum Sensortype {
 
 class ExtendedKalmanFilterBase {
 public:
-	ExtendedKalmanFilterBase() :init(false){};
+	ExtendedKalmanFilterBase() :init(false), initMeasurementCountMAGGPS({ 0,0,0 }) {};
 	bool isInitialised() const { return init; }
 	Eigen::VectorXd getState() const {
 		return state;
@@ -152,9 +152,14 @@ public:
 	void updateGPS(std::vector<Eigen::Vector3d> gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
 
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas, const Eigen::Vector3d& psi_dot_vimu, const Eigen::Quaternion<double>& orientation,const Eigen::Vector3d& coords, Eigen::Vector3d psi_dot_dot_vimu = Eigen::Vector3d::Zero()) {
+	//	return orientation._transformVector(accMeas);
 		// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
 		return orientation.conjugate()._transformVector(accMeas - orientation._transformVector(psi_dot_dot_vimu.cross(coords)) - orientation._transformVector(psi_dot_vimu.cross(psi_dot_vimu.cross(coords))));
 	}
+
+	void federtatedStateAVG(std::vector<Eigen::VectorXd> states);
+
+
 
 private:
 	int numIMUs;

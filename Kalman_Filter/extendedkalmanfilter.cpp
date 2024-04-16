@@ -642,9 +642,9 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		R(1, 1) = acc_var;
 		R(2, 2) = acc_var;
 
-		H.row(0) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
-		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
-		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
+		H.row(0) << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 
 		Eigen::Vector3d y = accMeas - H * state;
 		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
@@ -673,9 +673,9 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		y = gMeas - p_dot_dot_hat;
 
 		// non linear modell, bc of direction cosine
-		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_2, 2 * q_3, -2 * q_0, 2 * q_1;
-		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_1, 2 * q_0, 2 * q_3, 2 * q_1;
-		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, 2 * q_3;
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_2, 2 * q_3, -2 * q_0, 2 * q_1, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_1, 2 * q_0, 2 * q_3, 2 * q_1, 0, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, 2 * q_3, 0, 0, 0, 0, 0, 0;
 
 		S = H * covariance * H.transpose() + R;
 		K = covariance * H.transpose() * S.inverse();
@@ -783,9 +783,9 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 		R(1, 1) = 1;
 		R(2, 2) = 1;
 
-		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
-		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
-		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3, 0, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2, 0, 0, 0, 0, 0, 0;
 
 		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
 		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
@@ -864,9 +864,8 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 			// 1. transform
 			for (int i = 0; i < gpsMeas.size(); i++) {
-				Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
-				if (isValidMeasurement(gps, transformed_gpsMeas)) {
-					gpsMeasAvg += transformed_gpsMeas;
+				if (isValidMeasurement(gps,gpsMeas[i])) {
+					gpsMeasAvg += gpsMeas[i] ;
 					num_IMUs_avg++;
 				}
 			}
@@ -890,9 +889,8 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 			// 1. transform
 			for (int i = 0; i < gpsMeas.size(); i++) {
-				Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
-				if (isValidMeasurement(gps, transformed_gpsMeas)) {
-					gpsMeasAvg += transformed_gpsMeas;
+				if (isValidMeasurement(gps, gpsMeas[i])) {
+					gpsMeasAvg += gpsMeas[i];
 					num_IMUs_avg++;
 				}
 			}
@@ -991,10 +989,10 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 			covariance(18, 18) = GYRO_STD * GYRO_STD;
 
 			// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
-			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
-			covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
-			covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR;
-			covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR;
+			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR,0,0,0,0,0,0;
+			covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
+			covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
+			covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, 0, 0, 0, 0, 0, 0;
 
 
 			setState(state);
@@ -1013,9 +1011,8 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 		// 1. transform
 		for (int i = 0; i < gpsMeas.size(); i++) {
-			Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
-			if (isValidMeasurement(gps, transformed_gpsMeas)) {
-				gpsMeasAvg += transformed_gpsMeas;
+			if (isValidMeasurement(gps, gpsMeas[i])) {
+				gpsMeasAvg += gpsMeas[i];
 				num_IMUs_avg++;
 			}
 		}
@@ -1039,9 +1036,9 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 		R(1, 1) = gps_var;
 		R(2, 2) = gps_var;
 
-		H.row(0) << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-		H.row(1) << 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-		H.row(2) << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(0) << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(1) << 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+		H.row(2) << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 
 		Eigen::Vector3d y = gpsMeas - H * state;
 		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
@@ -1105,10 +1102,10 @@ bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vect
 	case magnetometer: 
 		return true;
 	case gps:
-		if (abs(meas(0) - ref_lat) < 1) {
+		if (abs(meas(0) - ref_lat) > 1) {
 			return false;
 		}
-		else if (abs(meas(1) - ref_long) < 1) {
+		else if (abs(meas(1) - ref_long) > 1) {
 			return false;
 		}
 		else {
