@@ -501,7 +501,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		double q_3 = state(12);
 		double psi_x_dot_old = state(13);
 		double psi_y_dot_old = state(14);
-		double psi_y_dot_old = state(15);
+		double psi_z_dot_old = state(15);
 
 	
 	
@@ -513,7 +513,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		
 		// 1. transform
 		for (int i = 0; i< gyroMeas.size(); i++) {
-			transformed_gyroMeas = transform_Gyro(gyroMeas[i], VIMU_Orientations[i]);
+			Eigen::Vector3d transformed_gyroMeas = transform_Gyro(gyroMeas[i], VIMU_Orientations[i]);
 			if (isValidMeasurement(gyroscope, transformed_gyroMeas)) {
 				gyroMeasAvg += transformed_gyroMeas;
 				num_IMUs_avg++;
@@ -522,7 +522,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		// 2. AVG
 		gyroMeasAvg /= num_IMUs_avg;
 
-		
+		Eigen::Vector3d gyroMeas = gyroMeasAvg;
 
 		// Conversion from ("body") XYD -> ("local") NED
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
@@ -609,7 +609,7 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 
 		// 1. transform
 		for (int i = 0; i < accMeas.size(); i++) {
-			transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
+			Eigen::Vector3d transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
 			if (isValidMeasurement(accelerometer, transformed_accMeas)) {
 				accMeasAvg += transformed_accMeas;
 				num_IMUs_avg++;
@@ -711,7 +711,7 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		
 		// 1. transform
 		for (int i = 0; i< accMeas.size(); i++) {
-			transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
+			Eigen::Vector3d transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
 			if (isValidMeasurement(accelerometer, transformed_accMeas)) {
 				accMeasAvg += transformed_accMeas;
 				num_IMUs_avg++;
@@ -762,9 +762,9 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 
 		// 1. transform
 		for (int i = 0; i < magMeas.size(); i++) {
-			transformed_gyroMag = transform_Mag(magMeas[i], VIMU_Orientations[i]);
-			if (isValidMeasurement(gyroscope, transformed_gyroMag)) {
-				magMeasAvg += transformed_gyroMeas;
+			Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
+			if (isValidMeasurement(gyroscope, transformed_magMeas)) {
+				magMeasAvg += transformed_magMeas;
 				num_IMUs_avg++;
 			}
 		}
@@ -822,9 +822,9 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 
 		// 1. transform
 		for (int i = 0; i < magMeas.size(); i++) {
-			transformed_gyroMag = transform_Mag(magMeas[i], VIMU_Orientations[i]);
-			if (isValidMeasurement(gyroscope, transformed_gyroMag)) {
-				magMeasAvg += transformed_gyroMeas;
+			Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
+			if (isValidMeasurement(gyroscope, transformed_magMeas)) {
+				magMeasAvg += transformed_magMeas;
 				num_IMUs_avg++;
 			}
 		}
@@ -864,7 +864,7 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 			// 1. transform
 			for (int i = 0; i < gpsMeas.size(); i++) {
-				transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
+				Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
 				if (isValidMeasurement(gps, transformed_gpsMeas)) {
 					gpsMeasAvg += transformed_gpsMeas;
 					num_IMUs_avg++;
@@ -890,7 +890,7 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 			// 1. transform
 			for (int i = 0; i < gpsMeas.size(); i++) {
-				transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
+				Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
 				if (isValidMeasurement(gps, transformed_gpsMeas)) {
 					gpsMeasAvg += transformed_gpsMeas;
 					num_IMUs_avg++;
@@ -1006,8 +1006,27 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
 
+		// GPS AVG over measurements
+		// Counts the number of imu influenced in the current measurement, ignores outliers
+		int num_IMUs_avg = 0;
+		Eigen::Vector3d gpsMeasAvg = Eigen::Vector3d::Zero();
+
+		// 1. transform
+		for (int i = 0; i < gpsMeas.size(); i++) {
+			Eigen::Vector3d transformed_gpsMeas = transform_Gyro(gpsMeas[i], VIMU_Orientations[i]);
+			if (isValidMeasurement(gps, transformed_gpsMeas)) {
+				gpsMeasAvg += transformed_gpsMeas;
+				num_IMUs_avg++;
+			}
+		}
+		// 2. AVG
+		gpsMeasAvg /= num_IMUs_avg;
+
+		Eigen::Vector3d gpsMeas = gpsMeasAvg;
+
+
 		// GPS in NED locally Coordinates at Position of the (V)IMU
-		gpsMeas = computeECEF2NED(gpsMeas) + getCoords();
+		gpsMeas = computeECEF2NED(gpsMeas);
 
 
 

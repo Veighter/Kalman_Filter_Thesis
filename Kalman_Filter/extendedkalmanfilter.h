@@ -127,7 +127,7 @@ public:
 	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
 
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas) {
-		return getOrientation()._transformVector(ins.imuData[row].accelMeas);
+		return getOrientation()._transformVector(accMeas);
 	}
 
 
@@ -140,7 +140,8 @@ private:
 
 class VIMUExtendedKalmanFilter : public ExtendedKalmanFilterBase {
 public:
-	VIMUExtendedKalmanFilter(int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations=IMU_Orientation, VIMU_Coords=IMU_Coords, ExtendedKalmanFilterBase() {
+	VIMUExtendedKalmanFilter() :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase() {};
+		VIMUExtendedKalmanFilter(int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase() {
 	//	assert(numIMU == VIMU_Orientations.size() == VIMU_Coords.size());
 	};
 
@@ -152,7 +153,7 @@ public:
 
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas, const Eigen::Vector3d& psi_dot_vimu, const Eigen::Quaternion<double>& orientation,const Eigen::Vector3d& coords, Eigen::Vector3d psi_dot_dot_vimu = Eigen::Vector3d::Zero()) {
 		// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
-		return orientation.conjugate()._transformVector(accMeas - orientation._transformVector(psi_dot_dot_vimu.cross(coords) - orientation._transformVector(psi_dot_vimu.cross(psi_dot_vimu.cross(coords)));
+		return orientation.conjugate()._transformVector(accMeas - orientation._transformVector(psi_dot_dot_vimu.cross(coords)) - orientation._transformVector(psi_dot_vimu.cross(psi_dot_vimu.cross(coords))));
 	}
 
 private:
