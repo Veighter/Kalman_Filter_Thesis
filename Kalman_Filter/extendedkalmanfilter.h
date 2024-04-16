@@ -71,21 +71,6 @@ public:
 
 	bool isValidMeasurement(Sensortype sensor, Eigen::Vector3d meas);
 
-	Eigen::Vector3d transform_Gyro(const Eigen::Vector3d& gyroMeas, const Eigen::Quaternion<double>& orientation) {
-		return orientation._transformVector(gyroMeas);
-	}
-
-	Eigen::Vector3d transform_Mag(const Eigen::Vector3d& magMeas, const Eigen::Quaternion<double>& orientation) {
-		Eigen::Vector3d transformed_magMeas = magMeas;
-		transformed_magMeas(1) *= -1;
-		transformed_magMeas(2) *= -1;
-		return orientation._transformVector(transformed_magMeas);
-	}
-
-
-
-
-
 private:
 	bool init;
 	uint8_t minInitMeasurements = 10;
@@ -98,10 +83,6 @@ private:
 	Eigen::Vector3d referenceECEFPosition;
 	
 	Eigen::Matrix3d rotationMatrix;
-	
-
-	
-
 	
 };
 
@@ -125,6 +106,17 @@ public:
 	void updateAcc(Eigen::Vector3d accMeas, double dt);
 	void updateMag(Eigen::Vector3d magMeas, double dt);
 	void updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
+
+	Eigen::Vector3d transform_Gyro(const Eigen::Vector3d& gyroMeas) {
+		return getOrientation()._transformVector(gyroMeas);
+	}
+
+	Eigen::Vector3d transform_Mag(const Eigen::Vector3d& magMeas) {
+		Eigen::Vector3d transformed_magMeas = magMeas;
+		transformed_magMeas(1) *= -1;
+		transformed_magMeas(2) *= -1;
+		return getOrientation()._transformVector(transformed_magMeas);
+	}
 
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas) {
 		return getOrientation()._transformVector(accMeas);
@@ -150,6 +142,19 @@ public:
 	void updateAcc(std::vector<Eigen::Vector3d> accMeas, double dt);
 	void updateMag(std::vector<Eigen::Vector3d> magMeas, double dt);
 	void updateGPS(std::vector<Eigen::Vector3d> gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial = Eigen::Vector3d(), Eigen::Quaternion<double> orientationInitial = Eigen::Quaternion<double>{ 0,0,0,0 });
+
+
+	Eigen::Vector3d transform_Gyro(const Eigen::Vector3d& gyroMeas, const Eigen::Quaternion<double>& orientation) {
+		return orientation._transformVector(gyroMeas);
+	}
+
+	Eigen::Vector3d transform_Mag(const Eigen::Vector3d& magMeas, const Eigen::Quaternion<double>& orientation) {
+		Eigen::Vector3d transformed_magMeas = magMeas;
+		transformed_magMeas(1) *= -1;
+		transformed_magMeas(2) *= -1;
+		return orientation._transformVector(transformed_magMeas);
+	}
+
 
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas, const Eigen::Vector3d& psi_dot_vimu, const Eigen::Quaternion<double>& orientation,const Eigen::Vector3d& coords, Eigen::Vector3d psi_dot_dot_vimu = Eigen::Vector3d::Zero()) {
 	//	return orientation._transformVector(accMeas);

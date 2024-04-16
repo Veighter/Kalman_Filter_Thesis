@@ -44,6 +44,8 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		double q_2 = state(11);
 		double q_3 = state(12);
 
+		gyroMeas = transform_Gyro(gyroMeas)
+
 		
 
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
@@ -1054,6 +1056,21 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 
 };
+
+
+void VIMUExtendedKalmanFilter::federtatedStateAVG(std::vector<Eigen::VectorXd> states) {
+
+	Eigen::VectorXd stateVIMU = Eigen::VectorXd::Zero(states[0].rows());
+
+	for (Eigen::VectorXd state : states) {
+		stateVIMU += state;
+	}
+
+	stateVIMU /= states.size();
+	setState(stateVIMU);
+
+};
+
 
 // sequence is ZYX -> Yaw, Pitch, Roll : Is it adaequat?? 1 of 12 possibilities
 // Quaternion & Rotation Sequences p.167

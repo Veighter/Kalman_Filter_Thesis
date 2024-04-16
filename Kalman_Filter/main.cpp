@@ -136,6 +136,8 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 
 	double dt_imu{}, dt_gps{};
 
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+
 
 	// jeder einzelne Sensor schaetzt seinen Zustand in sich selbst (nach transformieren in den Rahmen der VIMU)
 	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
@@ -150,7 +152,6 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 		
 		// Update the IMU extended Kalman filter with the values rotated in the virtual IMU frame in the Center of Mass
 		for (INS* ins : centralized_ins.inss) {
-
 
 			dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
 			ins->ekf.predictionStep(transform_Gyro(ins->imuData[row_imu].gyroMeas, ins->ekf.getOrientation()), dt_imu);
@@ -168,15 +169,15 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 		// durchlaufen der init abfrage der ins
 		if (!init) {
 			init = true;
-			for (INS* ins : cm_INS.inss) {
+			for (INS* ins : centralized_ins.inss) {
 				init = init && ins->ekf.isInitialised();
 			}
 		}
 
-		if (cm_INS.timeDataIMU[row_before] < cm_INS.timeDataGPS[row_gps] && cm_INS.timeDataGPS[row_gps] < cm_INS.timeDataIMU[row_imu]) {
+		if (centralized_ins.timeDataIMU[row_before] < centralized_ins.timeDataGPS[row_gps] && centralized_ins.timeDataGPS[row_gps] < centralized_ins.timeDataIMU[row_imu]) {
 
 			if (row_gps > 0) {
-				dt_gps = cm_INS.timeDataGPS[row_gps] - cm_INS.timeDataGPS[row_gps - (int)1];
+				dt_gps = centralized_ins.timeDataGPS[row_gps] - centralized_ins.timeDataGPS[row_gps - (int)1];
 			}
 			else { dt_gps = 0; }
 
@@ -184,15 +185,15 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 							// Mitteln der Werte, um die Fusion in dem Punkt zu machen
 			// GPS Fusion in VIMU and not in the IMUs itself
 			if (init) {
-				for (INS* ins : cm_INS.inss) {
-					cm_INS.ekf.setState(cm_INS.ekf.getState() + ins->ekf.getState());
+				for (INS* ins : centralized_ins.inss) {
+					centralized_ins.ekf.setState(centralized_ins.ekf.getState() + ins->ekf.getState());
 				}
-				cm_INS.ekf.setState(cm_INS.ekf.getState() / num_IMUs);
-				cm_INS.ekf.updateGPS(cm_INS.GPSData[0][row_gps], dt_gps);
+				centralized_ins.ekf.setState(centralized_ins.ekf.getState() / num_IMUs);
+				centralized_ins.ekf.updateGPS(centralized_ins.GPSData[0][row_gps], dt_gps);
 
 				// Update the central state in the IMU state
 				// What states have to be updated? All or position only?
-				for (INS* ins : cm_INS.inss)
+				for (INS* ins : centralized_ins.inss)
 				{
 					//ins->ekf.
 
@@ -201,7 +202,7 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 
 			}
 			else {
-				for (INS* ins : cm_INS.inss)
+				for (INS* ins : centralized_ins.inss)
 				{
 					ins->ekf.updateGPS(cm_INS.GPSData[0][row_gps], dt_gps);
 
