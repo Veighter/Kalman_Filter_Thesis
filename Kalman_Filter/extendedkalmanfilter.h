@@ -41,7 +41,7 @@ public:
 	}
 	Eigen::MatrixXd getCovariance() const { return covariance; }
 	Eigen::Vector3d getReferenceECEFPosition() const { return referenceECEFPosition; }
-	void setState(const Eigen::VectorXd& new_state) { state = new_state;}
+	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
 	void initFinished() { init = true; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
 	void setReferenceGeodeticPosition(Eigen::Vector3d& referenceGeodeticPosition) {
@@ -49,9 +49,10 @@ public:
 	}
 	Eigen::Vector3i getInitMeasurementCount() { return initMeasurementCountMAGGPS; }
 	void updateMeasurementCount(uint8_t coloumn) { initMeasurementCountMAGGPS[coloumn] += 1; }
+	void setMeasurementCount(Eigen::Vector3i counts) { initMeasurementCountMAGGPS = counts; }
 	uint8_t getMinInitMeasurementCount() const { return minInitMeasurements; }
 
-	
+
 
 	// Orientation of the vehicle Frame to which the sensor refers
 	Eigen::Quaternion<double> computeOrientation(double roll, double pitch, double yaw);
@@ -75,15 +76,15 @@ private:
 	bool init;
 	uint8_t minInitMeasurements = 10;
 	Eigen::Vector3i initMeasurementCountMAGGPS;	// Counter for initial Measurements for INIT Orientation, Position
-												// [Mag, Acc, GPS]
+	// [Mag, Acc, GPS]
 
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
 	CoordTransformer coordTransformer;
 	Eigen::Vector3d referenceECEFPosition;
-	
+
 	Eigen::Matrix3d rotationMatrix;
-	
+
 };
 
 class ExtendedKalmanFilter : public ExtendedKalmanFilterBase {
@@ -132,9 +133,12 @@ private:
 
 class VIMUExtendedKalmanFilter : public ExtendedKalmanFilterBase {
 public:
-	VIMUExtendedKalmanFilter() :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase() {};
-		VIMUExtendedKalmanFilter(int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase() {
-	//	assert(numIMU == VIMU_Orientations.size() == VIMU_Coords.size());
+	VIMUExtendedKalmanFilter() :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase() {
+		setState(Eigen::VectorXd::Zero(19));
+		setMeasurementCount(Eigen::Vector3i{ getMinInitMeasurementCount(), getMinInitMeasurementCount(), getMinInitMeasurementCount() });
+	} // Default Constructor used in Federated Fusion
+	VIMUExtendedKalmanFilter(int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase() {
+		//	assert(numIMU == VIMU_Orientations.size() == VIMU_Coords.size());
 	};
 
 	// VIMU has to calculate the average of the measurements
@@ -156,9 +160,9 @@ public:
 	}
 
 
-	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas, const Eigen::Vector3d& psi_dot_vimu, const Eigen::Quaternion<double>& orientation,const Eigen::Vector3d& coords, Eigen::Vector3d psi_dot_dot_vimu = Eigen::Vector3d::Zero()) {
-	//	return orientation._transformVector(accMeas);
-		// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
+	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas, const Eigen::Vector3d& psi_dot_vimu, const Eigen::Quaternion<double>& orientation, const Eigen::Vector3d& coords, Eigen::Vector3d psi_dot_dot_vimu = Eigen::Vector3d::Zero()) {
+		//	return orientation._transformVector(accMeas);
+			// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
 		return orientation.conjugate()._transformVector(accMeas - orientation._transformVector(psi_dot_dot_vimu.cross(coords)) - orientation._transformVector(psi_dot_vimu.cross(psi_dot_vimu.cross(coords))));
 	}
 

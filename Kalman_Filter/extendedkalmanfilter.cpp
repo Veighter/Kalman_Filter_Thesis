@@ -44,9 +44,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		double q_2 = state(11);
 		double q_3 = state(12);
 
-		gyroMeas = transform_Gyro(gyroMeas)
-
-		
+		gyroMeas = transform_Gyro(gyroMeas);
 
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
 	
@@ -128,7 +126,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GYRO\n";
+		std::cout << "GYRO IMU\n";
 	}
 	
 }
@@ -141,7 +139,9 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
-		
+
+		// Transformation from Sensor Acc to vehicle Body Acc
+		accMeas = transform_Acc(accMeas);
 		//Conversion from ("body") XYD -> ("local") NED
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ state(9), state(10), state(11), state(12) };
 		accMeas = orientation._transformVector(accMeas);
@@ -152,8 +152,6 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		// Correction for the gravity	
 		accMeas(2) += g;
 		
-		
-
 		// Acc Correction, Measurement noise noch hinzufuegen [R]
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
@@ -213,7 +211,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "ACC\n";
+		std::cout << "ACC IMU\n";
 
 	}
 	else {
@@ -225,6 +223,10 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		else {
 			state = getState();
 		}
+
+		// Transformation from Sensor Acc to vehicle Body Acc
+		accMeas = transform_Acc(accMeas);
+
 		state(6) += accMeas(0);
 		state(7) += accMeas(1);
 		state(8) += accMeas(2);
@@ -260,6 +262,9 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2; 
 
 		// where do i put the declination angle? ("Angle between magnetic and true north")
+		// Transformation from Sensor Acc to vehicle Body Acc
+		magMeas = transform_Mag(magMeas);
+
 
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
 		magMeas = orientation._transformVector(magMeas);
@@ -303,7 +308,11 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		}
 		else {
 			state = getState();
-		}// Use uninitialisied Quaternion state for placeholder
+		}
+		// Transformation from Sensor Acc to vehicle Body Acc
+		magMeas = transform_Mag(magMeas);
+
+		// Use uninitialisied Quaternion state for placeholder
 		state(9) += magMeas(0);
 		state(10) += magMeas(1);
 		state(11) += magMeas(2);
@@ -360,6 +369,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			setReferenceGeodeticPosition(gpsMeas);
 
 			// set Reference to zero + the Coords of the (V)IMU in the construct
+
 
 			state(0) = 0+coords(0);
 			state(1) = 0+coords(1);
@@ -476,7 +486,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GPS\n";
+		std::cout << "GPS IMU\n";
 	}
 
 }
@@ -968,10 +978,11 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 			// Fist Init of Covariane
 			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(19, 19);
 
-			double gps_var{}, vel_var{}, acc_var{};
+			double gps_var{}, vel_var{}, acc_var{}, gyro_var{};
 			gps_var = GPS_POS_STD * GPS_POS_STD;
 			vel_var = INIT_VEL_STD * INIT_VEL_STD;
 			acc_var = ACCEL_STD * ACCEL_STD;
+			gyro_var = GYRO_STD * GYRO_STD;
 
 
 			covariance(0, 0) = gps_var;
@@ -983,12 +994,12 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 			covariance(6, 6) = acc_var;
 			covariance(7, 7) = acc_var;
 			covariance(8, 8) = acc_var;
-			covariance(13, 13) = GYRO_STD * GYRO_STD;
-			covariance(14, 14) = GYRO_STD * GYRO_STD;
-			covariance(15, 15) = GYRO_STD * GYRO_STD;
-			covariance(16, 16) = GYRO_STD * GYRO_STD;
-			covariance(17, 17) = GYRO_STD * GYRO_STD;
-			covariance(18, 18) = GYRO_STD * GYRO_STD;
+			covariance(13, 13) = gyro_var;
+			covariance(14, 14) = gyro_var;
+			covariance(15, 15) = gyro_var;
+			covariance(16, 16) = gyro_var;
+			covariance(17, 17) = gyro_var;
+			covariance(18, 18) = gyro_var;
 
 			// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
 			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR,0,0,0,0,0,0;
