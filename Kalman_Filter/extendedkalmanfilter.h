@@ -5,6 +5,13 @@
 #include <Eigen\Dense>
 #include "coordTransformation.h"
 
+/// <summary>
+/// Fusion Configurations, priori knowledge for the initialisation
+/// </summary>
+enum class FusionConfig {
+	MAG, // Magnetometer, Accelerometer, Gyroskop
+	MAGGPS // Magnetometer, Accelerometer, Gyroskop, GPS
+};
 
 
 namespace calibration {
@@ -34,7 +41,15 @@ enum Sensortype {
 
 class ExtendedKalmanFilterBase {
 public:
-	ExtendedKalmanFilterBase() :init(false), initMeasurementCountMAGGPS({ 0,0,0 }) {};
+	ExtendedKalmanFilterBase() :init(false) {};
+	ExtendedKalmanFilterBase(FusionConfig fg) :init(false), fusionConfig(fg) {
+		if (fusionConfig == FusionConfig::MAG) {
+			initMeasurementCounter = Eigen::Vector2i{ 0,0 };
+		}
+		if (fusionConfig == FusionConfig::MAGGPS) {
+			initMeasurementCounter = Eigen::Vector3i{ 0,0,0 };
+		}
+	};
 	bool isInitialised() const { return init; }
 	Eigen::VectorXd getState() const {
 		return state;
@@ -47,9 +62,12 @@ public:
 	void setReferenceGeodeticPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
-	Eigen::Vector3i getInitMeasurementCount() { return initMeasurementCountMAGGPS; }
-	void updateMeasurementCount(uint8_t coloumn) { initMeasurementCountMAGGPS[coloumn] += 1; }
-	void setMeasurementCount(Eigen::Vector3i counts) { initMeasurementCountMAGGPS = counts; }
+	FusionConfig getFusionConfig() { return fusionConfig; }
+	Eigen::VectorXi getInitMeasurementCount() { return initMeasurementCounter; }
+	void updateMeasurementCount(uint8_t coloumn) {
+	initMeasurementCounter[coloumn] += 1; 
+	}
+	void setMeasurementCount(Eigen::VectorXi counts) { initMeasurementCounter = counts; }
 	uint8_t getMinInitMeasurementCount() const { return minInitMeasurements; }
 
 
@@ -74,15 +92,16 @@ public:
 
 private:
 	bool init;
+	FusionConfig fusionConfig;
+
 	uint8_t minInitMeasurements = 10;
-	Eigen::Vector3i initMeasurementCountMAGGPS;	// Counter for initial Measurements for INIT Orientation, Position
-	// [Mag, Acc, GPS]
+	Eigen::VectorXi initMeasurementCounter;	// Counter for initial Measurements for INIT Orientation, Position
+	// [Mag, Acc] or [Mag, Acc, GPS]
 
 	Eigen::VectorXd state;
 	Eigen::MatrixXd covariance;
 	CoordTransformer coordTransformer;
 	Eigen::Vector3d referenceECEFPosition;
-
 	Eigen::Matrix3d rotationMatrix;
 
 };
@@ -133,11 +152,12 @@ private:
 
 class VIMUExtendedKalmanFilter : public ExtendedKalmanFilterBase {
 public:
-	VIMUExtendedKalmanFilter() :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase() {
+	VIMUExtendedKalmanFilter() :ExtendedKalmanFilterBase() {};
+	VIMUExtendedKalmanFilter(FusionConfig fg) :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase(fg) {
 		setState(Eigen::VectorXd::Zero(19));
 		setMeasurementCount(Eigen::Vector3i{ getMinInitMeasurementCount(), getMinInitMeasurementCount(), getMinInitMeasurementCount() });
 	} // Default Constructor used in Federated Fusion
-	VIMUExtendedKalmanFilter(int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase() {
+	VIMUExtendedKalmanFilter(FusionConfig fg,int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase(fg) {
 		//	assert(numIMU == VIMU_Orientations.size() == VIMU_Coords.size());
 	};
 

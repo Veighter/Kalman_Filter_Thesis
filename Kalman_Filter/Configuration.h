@@ -13,8 +13,11 @@ struct Orientation {
 
 
 enum class FusionMethod {
+	None, // no fusion, but just integration of the values of the IMUs -> to be implemented
 	Raw,
-	Federated
+	Raw_GPS,
+	Federated, 
+	Federated_GPS
 };
 
 class Configuration {
@@ -29,7 +32,7 @@ public:
 	std::string getIMU_Data_Path() { return c_imu_data_path; }
 	std::string getGPS_Data_Path() { return c_gps_data_path; }
 	FusionMethod getFusion_Method() { return c_fusion_method; }
-	Orientation getOrientations() { return c_orientations_imu; }
+	Orientation& getOrientations() { return c_orientations_imu; }
 
 private:
 	std::string c_name;

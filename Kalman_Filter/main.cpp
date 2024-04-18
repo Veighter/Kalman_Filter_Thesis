@@ -139,6 +139,88 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 INS_state naiveFusion(const std::vector<INS_state>& localTracks);
 
+void multiple_imu_fusion_estimation_gps(CM_INS& centralized_ins) {};
+void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix) {
+
+	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
+	std::ofstream state_writer{};
+	std::string path_time, path_position;
+	Eigen::VectorXd state;
+
+	std::vector<Eigen::Quaternion<double>> VIMU_Orientations = std::vector<Eigen::Quaternion<double>>();
+	std::vector<Eigen::Vector3d> VIMU_Coords = std::vector<Eigen::Vector3d>();
+
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+
+	for (INS* ins : centralized_ins.inss) {
+		VIMU_Orientations.push_back(ins->ekf.getOrientation());
+		VIMU_Coords.push_back(ins->ekf.getCoords());
+	}
+
+	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionConfig::MAG,num_IMUs, VIMU_Orientations, VIMU_Coords);
+
+	double dt_imu{};
+	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
+	while (row_imu < IMU_DATA_ROWS) {
+
+		// Prediction Step
+		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+		// Append gyro meas of each imu to vector
+		for (INS* ins : centralized_ins.inss) {
+			meas.push_back(ins->imuData[row_imu].gyroMeas);
+		}
+
+		centralized_ins.vekf.predictionStep(meas, dt_imu);
+
+		// Update Step
+			// Append acc meas of each imu to vector
+		meas.clear();
+		for (INS* ins : centralized_ins.inss) {
+			meas.push_back(ins->imuData[row_imu].accelMeas);
+		}
+
+		centralized_ins.vekf.updateAcc(meas, dt_imu);
+
+		// MAG only used for initialisation process
+		if (!centralized_ins.vekf.isInitialised()) {
+
+			// Append mag meas of each imu to vector
+			meas.clear();
+			for (INS* ins : centralized_ins.inss) {
+				meas.push_back(ins->imuData[row_imu].magMeas);
+			}
+
+			centralized_ins.vekf.updateMag(meas, dt_imu);
+		}
+
+		if (centralized_ins.vekf.isInitialised()) {
+
+			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_vimu_" + file_appendix + ".txt";
+
+			state_writer.open(path_time, std::ios_base::app);
+			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+			state_writer.close();
+
+			state = centralized_ins.vekf.getState();
+
+			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_vimu_" + file_appendix + ".txt";
+			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_vimu.txt", std::ios_base::app);
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer.close();
+
+			if (state(0) > 1000 || state(1) > 1000) {
+
+				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			}
+		}
+		meas.clear();
+		row_imu++;
+			}
+
+
+};
+
 void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 	double sampleTime = 1000000; // 1 ms
 	std::ofstream state_writer{};
@@ -202,7 +284,7 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 				meas.push_back(gpsMeas[row_gps]);
 			}
 
-		
+
 
 			/*
 			* Second try with the "naive" Fusion in a Fusion Center, that is not a EKF
@@ -300,13 +382,14 @@ INS_state naiveFusion(const std::vector<INS_state>& localTracks) {
 }
 
 
-void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
+void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appendix) {
 
 	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
 	int row_gps = 0;
 
-	double time_start = centralized_ins.timeDataGPS[0];
 	std::ofstream state_writer{};
+	std::string path_time, path_position;
+
 	Eigen::VectorXd state;
 
 	std::vector<Eigen::Quaternion<double>> VIMU_Orientations = std::vector<Eigen::Quaternion<double>>();
@@ -319,7 +402,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 		VIMU_Coords.push_back(ins->ekf.getCoords());
 	}
 
-	centralized_ins.vekf = VIMUExtendedKalmanFilter(num_IMUs, VIMU_Orientations, VIMU_Coords);
+	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionConfig::MAGGPS, num_IMUs, VIMU_Orientations, VIMU_Coords);
 
 	double dt_imu{}, dt_gps{};
 	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
@@ -377,12 +460,16 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins) {
 
 		if (centralized_ins.vekf.isInitialised()) {
 
-			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_vimu.txt", std::ios_base::app);
+
+			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_vimu_" + file_appendix + ".txt";
+
+			state_writer.open(path_time, std::ios_base::app);
 			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
 			state_writer.close();
 
 			state = centralized_ins.vekf.getState();
 
+			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_vimu_" + file_appendix + ".txt";
 			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_vimu.txt", std::ios_base::app);
 			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
@@ -422,82 +509,8 @@ void get_calibrated_meas(INS& ins) {
 
 }
 
-void fuse(Configuration configuration) {
-	
-}
 
-
-int main()
-{
-
-	// Orientation of the IMUs in the previous thesis
-	Orientation orientation_bochum{};
-	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ -0.23 , -0.769, -0.444, -0.398 };
-	orientation_bochum.o_imu_1 = Eigen::Quaternion<double> { -0.23, 0.119, 0.444, 0.858 };
-	orientation_bochum.o_imu_6 = Eigen::Quaternion<double> { -0.39807, -0.44399, 0.76902, 0.22983 };
-	orientation_bochum.o_imu_7 = Eigen::Quaternion<double> { 0.85781 ,0.44404, -0.11898 , 0.22985 };
-
-	// Orientation of the IMUs in Test Data Aquisition from 18.4.2024
-	Orientation orientation_froemern{};
-	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
-	orientation_bochum.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
-	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
-	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
-
-
-	/*
-	* Create Configs for the different test data
-	*/
-
-	// Testdata Bochum
-	Configuration bochum_raw = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/");
-
-	Configuration bochum_federated = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/", FusionMethod::Federated);
-
-
-	fuse()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	double time_constant{};
-	// read in of datafiles with the coloum structure:
-	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
-
-	//if (new_orientation) {
-	//	time_constant = 1e3;
-	//	data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_";
-	//}
-	//if (new_orientation) {
-	//	time_constant = 1e6;
-	//	data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/DatalogsVeit/FroemernFahrt18.4.2024/IMU_";
-	//}
-	//else {
-	//			data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_";
-	//}
-
-
-
+void init_local_INS(Orientation& orientation) {
 	// Define INS1
 	ins_1.imu_port = 0;
 	ins_1.ekf.setCoords(Eigen::Vector3d{ 76.7441, -1.6672, -53.0125 });
@@ -542,38 +555,21 @@ int main()
 	ins_4.ekf.setGyroTransformMatrix((Eigen::Matrix3d() << 0.93908668, -0.0466796, -0.20330397, -0.13423415, 0.67620875, -0.33500868, 0.08244915, -0.28759273, 0.49361518).finished());
 
 	// set Orientation
-	if (new_orientation) {
-		ins_1.ekf.setOrientation(orient_new.o_imu_0);
-		ins_2.ekf.setOrientation(orient_new.o_imu_1);
-		ins_3.ekf.setOrientation(orient_new.o_imu_6);
-		ins_4.ekf.setOrientation(orient_new.o_imu_7);
-	}
-	else {
-		ins_1.ekf.setOrientation(orient_old.o_imu_0);
-		ins_2.ekf.setOrientation(orient_old.o_imu_1);
-		ins_3.ekf.setOrientation(orient_old.o_imu_6);
-		ins_4.ekf.setOrientation(orient_old.o_imu_7);
-	}
 
 
+	ins_1.ekf.setOrientation(orientation.o_imu_0);
+	ins_2.ekf.setOrientation(orientation.o_imu_1);
+	ins_3.ekf.setOrientation(orientation.o_imu_6);
+	ins_4.ekf.setOrientation(orientation.o_imu_7);
+}
 
-	cm_INS.inss[0] = &ins_1;
-	cm_INS.inss[1] = &ins_2;
-	cm_INS.inss[2] = &ins_3;
-	cm_INS.inss[3] = &ins_4;
-
-	cm_INS.ekf.setOrientation(Eigen::Quaternion<double>{1, 0, 0, 0});
-
-	int coloumn = 0; // Index for the array of values
+int read_imu_data(std::string data_IMU_path) {
 	int row = 0;
-	size_t pos = 0; // position of the delimiter in string
-
-
 	// Einlesen der Messdaten in die IMUs 
 	for (INS* ins : cm_INS.inss)
 	{
 		std::stringstream filepath{};
-		filepath << data_IMU_path << ins->imu_port << "/IMU_" << ins->imu_port << "_data.txt";
+		filepath << data_IMU_path << ins->imu_port << "_data.txt";
 		std::ifstream data_IMU{ filepath.str() };
 
 		if (!data_IMU.is_open())
@@ -603,19 +599,23 @@ int main()
 		row = 0;
 
 	}
+	return 0;
 
+}
 
-	// Time [us], Latitude [deg], Longitude Degree[deg]
-	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
+int read_gps_data(std::string data_GPS_path) {
+	int row = 0;
 
+	// Dataformat: Time [us], Latitude [deg], Longitude Degree[deg]
 
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 		std::stringstream filepath{};
-		filepath << data_GPS_path << gps_number + 1 << "/GPS_" << gps_number + 1 << "_data.txt";
+		filepath << data_GPS_path << gps_number + 1 << "_data.txt";
 		std::ifstream data_GPS{ filepath.str() };
 
 		if (!data_GPS.is_open())
 		{
+			std::cout << filepath.str() << std::endl;
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
 			return 1; // Rückgabe eines Fehlercodes
 		}
@@ -635,22 +635,80 @@ int main()
 		}
 
 	}
+	return 1;
+}
+
+
+void fuse(Configuration& configuration) {
+	FusionMethod fusion_method = configuration.getFusion_Method();
+
+	init_local_INS(configuration.getOrientations());
+
+	cm_INS.inss[0] = &ins_1;
+	cm_INS.inss[1] = &ins_2;
+	cm_INS.inss[2] = &ins_3;
+	cm_INS.inss[3] = &ins_4;
+
+	read_imu_data(configuration.getIMU_Data_Path());
+
+	if (fusion_method == FusionMethod::Raw_GPS || fusion_method == FusionMethod::Federated_GPS) {
+		read_gps_data(configuration.getGPS_Data_Path());
+	}
 
 	for (INS* ins : cm_INS.inss) {
 		get_calibrated_meas(*ins);
 	}
 
-	// Domain Fusion -> Raw Data
-	if (!estimation_fusion) {
-		// Transformieren der Datenpunkte in den Punkt der VIMU und dann mitteln der Werte
-		multiple_imu_fusion_raw(cm_INS);
-	}
-	// Estimation Fusion
-	if (estimation_fusion) {
-		// Transformieren erst zu einem Abtastzeitpunkt
+	return;
+
+	switch (fusion_method) {
+	case FusionMethod::Raw:
+		multiple_imu_fusion_raw(cm_INS, configuration.getName());
+		break;
+	case FusionMethod::Raw_GPS:
+		multiple_imu_fusion_raw_gps(cm_INS, configuration.getName());
+		break;
+	case FusionMethod::Federated:
 		multiple_imu_fusion_estimation(cm_INS);
+		break;
+	case FusionMethod::Federated_GPS:
+		multiple_imu_fusion_estimation_gps(cm_INS);
+		break;
 	}
 
+}
+
+
+int main()
+{
+
+	// Orientation of the IMUs in the previous thesis
+	Orientation orientation_bochum{};
+	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ -0.23 , -0.769, -0.444, -0.398 };
+	orientation_bochum.o_imu_1 = Eigen::Quaternion<double>{ -0.23, 0.119, 0.444, 0.858 };
+	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.39807, -0.44399, 0.76902, 0.22983 };
+	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
+
+	// Orientation of the IMUs in Test Data Aquisition from 18.4.2024
+	Orientation orientation_froemern{};
+	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
+	orientation_bochum.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
+	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
+	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
+
+
+	/*
+	* Create Configs for the different test data
+	*/
+
+	// Testdata Bochum
+	Configuration bochum_raw_gps = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_", FusionMethod::Raw_GPS);
+
+	Configuration bochum_federated_gps = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_", FusionMethod::Federated_GPS);
+
+
+	fuse(bochum_raw_gps);
+	fuse(bochum_federated_gps);
 
 	return 0;
 
