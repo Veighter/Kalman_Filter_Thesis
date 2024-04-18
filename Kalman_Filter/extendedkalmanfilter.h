@@ -63,17 +63,21 @@ public:
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
 	FusionConfig getFusionConfig() { return fusionConfig; }
-	Eigen::VectorXi getInitMeasurementCount() { return initMeasurementCounter; }
+	Eigen::VectorXi getInitMeasurementCounter() { return initMeasurementCounter; }
 	void updateMeasurementCount(uint8_t coloumn) {
 	initMeasurementCounter[coloumn] += 1; 
 	}
 	void setMeasurementCount(Eigen::VectorXi counts) { initMeasurementCounter = counts; }
 	uint8_t getMinInitMeasurementCount() const { return minInitMeasurements; }
 
+	
 
+	
 
 	// Orientation of the vehicle Frame to which the sensor refers
+	Eigen::Quaternion<double> computeInitOrientation(Eigen::VectorXd state);
 	Eigen::Quaternion<double> computeOrientation(double roll, double pitch, double yaw);
+	
 
 	void setReferenceECEFPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		setRotationMatrixECEF2NED(referenceGeodeticPosition);
@@ -89,6 +93,10 @@ public:
 	}
 
 	bool isValidMeasurement(Sensortype sensor, Eigen::Vector3d meas);
+	
+	bool initProcedureStart();
+	bool initSamplingFinished();
+	
 
 private:
 	bool init;
@@ -103,6 +111,10 @@ private:
 	CoordTransformer coordTransformer;
 	Eigen::Vector3d referenceECEFPosition;
 	Eigen::Matrix3d rotationMatrix;
+
+
+
+
 
 };
 
@@ -141,6 +153,8 @@ public:
 	Eigen::Vector3d transform_Acc(const Eigen::Vector3d& accMeas) {
 		return getOrientation()._transformVector(accMeas);
 	}
+
+	void setInitialStateAndCovariance();
 
 
 private:
@@ -185,6 +199,8 @@ public:
 			// Equation (2) of Data Fusion Algorithms for Multiple Inertial Measurement Units
 		return orientation.conjugate()._transformVector(accMeas - orientation._transformVector(psi_dot_dot_vimu.cross(coords)) - orientation._transformVector(psi_dot_vimu.cross(psi_dot_vimu.cross(coords))));
 	}
+
+	void setInitialStateAndCovariance();
 
 	void federtatedStateAVG(std::vector<Eigen::VectorXd> states);
 

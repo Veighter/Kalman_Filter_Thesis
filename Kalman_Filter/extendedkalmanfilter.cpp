@@ -5,7 +5,7 @@
 constexpr double ACCEL_STD = 1.0;
 constexpr double GYRO_STD = 0.1 / 180.0 * M_PI;
 constexpr double MAG_STD = 1.0;
-constexpr double GPS_POS_STD =3.0;
+constexpr double GPS_POS_STD = 3.0;
 
 // Initial standard derivation has to be high, bc we dont know exactly what they are
 constexpr double INIT_VEL_STD = 10.0;
@@ -47,14 +47,14 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		gyroMeas = transform_Gyro(gyroMeas);
 
 		Eigen::Quaternion<double> orientation = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
-	
+
 		// Conversion from ("body") XYD -> ("local") NED
 		gyroMeas = orientation._transformVector(gyroMeas);
 
 		double psi_x_dot = gyroMeas(0);
 		double psi_y_dot = gyroMeas(1);
 		double psi_z_dot = gyroMeas(2);
-	
+
 
 
 		//// Predict position
@@ -128,13 +128,43 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		setCovariance(covariance);
 		std::cout << "GYRO IMU\n";
 	}
-	
+
 }
 
 
 // Das was geschaetzt werden soll ist eigentlich nur Position, Geschwindigkeit und Orientierung des zu navigierenden Objekts. 
 // Anpassen des Zustandsvektors ist also von Noeten!!
 void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
+
+	if (!isInitialised()) {
+		if (initSamplingFinished()) {
+			setInitialStateAndCovariance();
+		}
+		else {
+
+			Eigen::Vector3i measCount = getInitMeasurementCounter();
+			Eigen::VectorXd state;
+			if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
+				state = Eigen::VectorXd::Zero(13);
+			}
+			else {
+				state = getState();
+			}
+
+			// Transformation from Sensor Acc to vehicle Body Acc
+			accMeas = transform_Acc(accMeas);
+
+			state(6) += accMeas(0);
+			state(7) += accMeas(1);
+			state(8) += accMeas(2);
+
+			updateMeasurementCount(0);
+
+			setState(state);
+			return;
+
+		}
+	}
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -151,7 +181,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		// Correction for the gravity	
 		accMeas(2) += g;
-		
+
 		// Acc Correction, Measurement noise noch hinzufuegen [R]
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
@@ -214,33 +244,41 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		std::cout << "ACC IMU\n";
 
 	}
-	else {
-		Eigen::Vector3i measCount = getInitMeasurementCount();
-		Eigen::VectorXd state;
-		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
-			state = Eigen::VectorXd::Zero(13);
-		}
-		else {
-			state = getState();
-		}
 
-		// Transformation from Sensor Acc to vehicle Body Acc
-		accMeas = transform_Acc(accMeas);
-
-		state(6) += accMeas(0);
-		state(7) += accMeas(1);
-		state(8) += accMeas(2);
-
-
-
-		updateMeasurementCount(0);
-
-		setState(state);
-	}
-	
 }
 
 void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
+
+	if (!isInitialised()) {
+		if (initSamplingFinished()) {
+			setInitialStateAndCovariance();
+		}
+		else {
+
+
+			Eigen::Vector3i measCount = getInitMeasurementCounter();
+			Eigen::VectorXd state;
+			if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
+				state = Eigen::VectorXd::Zero(13);
+			}
+			else {
+				state = getState();
+			}
+			// Transformation from Sensor Acc to vehicle Body Acc
+			magMeas = transform_Mag(magMeas);
+
+			// Use uninitialisied Quaternion state for placeholder
+			state(9) += magMeas(0);
+			state(10) += magMeas(1);
+			state(11) += magMeas(2);
+
+			updateMeasurementCount(1);
+
+			setState(state);
+			return;
+
+		}
+	}
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -253,13 +291,13 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		double q_2 = state(11);
 		double q_3 = state(12);
 
-	
+
 		// Magnet is in north direction, only x directed 
 
 		// Correction seems a bit of, mag_hat has to be in x-axis of the ned! But what does that mean for now?
 		mag_hat(0) = q_0 * q_0 + q_1 * q_1 - q_2 * q_2 - q_3 * q_3;
 		mag_hat(1) = 2 * q_1 * q_2 - 2 * q_0 * q_3;
-		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2; 
+		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
 
 		// where do i put the declination angle? ("Angle between magnetic and true north")
 		// Transformation from Sensor Acc to vehicle Body Acc
@@ -299,29 +337,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		std::cout << "MAG\n";
 
 	}
-	else {
 
-		Eigen::Vector3i measCount = getInitMeasurementCount();
-		Eigen::VectorXd state;
-		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
-			state = Eigen::VectorXd::Zero(13);
-		}
-		else {
-			state = getState();
-		}
-		// Transformation from Sensor Acc to vehicle Body Acc
-		magMeas = transform_Mag(magMeas);
-
-		// Use uninitialisied Quaternion state for placeholder
-		state(9) += magMeas(0);
-		state(10) += magMeas(1);
-		state(11) += magMeas(2);
-
-		updateMeasurementCount(1);
-
-		setState(state);
-	}
-	
 }
 
 // die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
@@ -336,12 +352,10 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial) {
 
 	if (!isInitialised()) {
-		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
-		uint8_t initMeasurements = getMinInitMeasurementCount();
 
-		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2) < initMeasurements) {
+		if (initSamplingFinished()) {
 			Eigen::VectorXd state;
-			if (initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0 && initMeasurementCount(2) == 0) {
+			if (initProcedureStart()) {
 				state = Eigen::VectorXd::Zero(13);
 			}
 			else {
@@ -356,7 +370,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		}
 		else {
 			Eigen::VectorXd state = getState();
-			Eigen::Vector3d coords = getCoords();
+
 
 
 			// Mean (better Median) of the measurements
@@ -364,95 +378,11 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 			gpsMeas(1) += state(1);
 			gpsMeas(2) += 0;
 
-			gpsMeas = gpsMeas / (getInitMeasurementCount()(2)+1); // mean of the init GPS Positions (11th measurement for GPS)
+			gpsMeas = gpsMeas / (getInitMeasurementCounter()(2) + 1); // mean of the init GPS Positions (11th measurement for GPS)
 
 			setReferenceGeodeticPosition(gpsMeas);
 
-			// set Reference to zero + the Coords of the (V)IMU in the construct
-
-
-			state(0) = 0+coords(0);
-			state(1) = 0+coords(1);
-			state(2) = 0+coords(2);
-
-			if (false) { // for velocity when added
-				state(3) = gpsVelocityInitial(0);
-				state(4) = gpsVelocityInitial(1);
-				state(5) = gpsVelocityInitial(2);
-			}
-			else {
-				state(3) = 0;
-				state(4) = 0;
-				state(5) = 0;
-			}
-			// Only is valid, if the sensor is stationary!!!
-			// Mean over acceleration init measurements
-			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
-			initAcc = initAcc / initMeasurementCount(0);
-
-			// Determine Pitch and Roll from Accelerometer -> Elevation angle, has to be nearly zero
-			// compute pitch
-			double pitch = std::asin(initAcc(0) / g);
-
-			// compute roll -> turn/ bank angle, has also to be nearly zero
-			double param = initAcc(1) / initAcc(2);
-		
-			double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
-
-			// Mean over magnetometer init measurements [with "Angle of Magnetic Declination" - Angle between magnetic and true north]
-			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
-			initMag = initMag / initMeasurementCount(1);
-
-			// Determine Yaw from magnetometer
-			double yaw = std::atan2(initMag(1), initMag(0)); //m_y/m_x ich
-	
-			
-			yaw += declinationAngle;
-
-			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
-
-			state(9) = initOrientation.w();
-			state(10) = initOrientation.x();
-			state(11) = initOrientation.y();
-			state(12) = initOrientation.z();
-			
-			// init the acceleration with the first Orientation from ("Body") XYD -> ("local") NED
-			initAcc = initOrientation._transformVector(initAcc);
-
-			state(6) = initAcc(0);	
-			state(7) = initAcc(1);
-			state(8) = initAcc(2)+g;
-
-			//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3
-			// Fist Init of Covariane
-			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
-
-			double gps_var{}, vel_var{}, acc_var{};
-			gps_var = GPS_POS_STD * GPS_POS_STD;
-			vel_var = INIT_VEL_STD * INIT_VEL_STD;
-			acc_var = ACCEL_STD * ACCEL_STD;
-
-
-			covariance(0, 0) = gps_var;
-			covariance(1, 1) = gps_var;
-			covariance(2, 2) = gps_var;
-			covariance(3, 3) = vel_var;
-			covariance(4, 4) = vel_var;
-			covariance(5, 5) = vel_var;
-			covariance(6, 6) = acc_var;
-			covariance(7, 7) = acc_var;
-			covariance(8, 8) = acc_var;
-
-			// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
-			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
-			covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
-			covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR;
-			covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR;
-
-
-			setState(state);
-			setCovariance(covariance);
-			initFinished();
+			setInitialStateAndCovariance();
 		}
 	}
 	else {
@@ -460,8 +390,8 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 		Eigen::MatrixXd covariance = getCovariance();
 
 		// GPS in NED locally Coordinates at Position of the (V)IMU
-		gpsMeas = computeECEF2NED(gpsMeas)+getCoords();
-		
+		gpsMeas = computeECEF2NED(gpsMeas) + getCoords();
+
 
 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
@@ -515,16 +445,16 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		double psi_y_dot_old = state(14);
 		double psi_z_dot_old = state(15);
 
-	
-	
+
+
 
 		// Gyro AVG over measurements
 		// Counts the number of imu influenced in the current measurement, ignores outliers
 		int num_IMUs_avg = 0;
-		Eigen::Vector3d gyroMeasAvg= Eigen::Vector3d::Zero() ;
-		
+		Eigen::Vector3d gyroMeasAvg = Eigen::Vector3d::Zero();
+
 		// 1. transform
-		for (int i = 0; i< gyroMeas.size(); i++) {
+		for (int i = 0; i < gyroMeas.size(); i++) {
 			Eigen::Vector3d transformed_gyroMeas = transform_Gyro(gyroMeas[i], VIMU_Orientations[i]);
 			if (isValidMeasurement(gyroscope, transformed_gyroMeas)) {
 				gyroMeasAvg += transformed_gyroMeas;
@@ -546,7 +476,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 
 		// state = x,y,z,x_dot,y_dot,z_dot,x_dot_dot,y_dot_dot,z_dot_dot,psi_x_dot,psi_y_dot,q0,q1,q2,q3,B_x,B_y,B_z
 		Eigen::MatrixXd F = Eigen::MatrixXd::Zero(19, 19);
-		F.row(0) << 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0,0,0,0,0,0,0;
+		F.row(0) << 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 		F.row(1) << 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 		F.row(2) << 0, 0, 1, 0, 0, dt, 0, 0, 1. / 2 * dt * dt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 		F.row(3) << 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -590,7 +520,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		state(10) = q.x();
 		state(11) = q.y();
 		state(12) = q.z();
-		
+
 		// update avg angular rate and angular acceleration
 		state(13) = psi_x_dot;
 		state(14) = psi_y_dot;
@@ -603,17 +533,57 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 		setCovariance(covariance);
 		std::cout << "GYRO\n";
 	}
-
-
 };
 
 
 void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, double dt) {
 
+	if (!isInitialised()) {
+		if (initSamplingFinished()) {
+			setInitialStateAndCovariance();
+		}
+		else {
+
+			Eigen::VectorXi measCount = getInitMeasurementCounter();
+			Eigen::VectorXd state;
+			if (initProcedureStart()) {
+				state = Eigen::VectorXd::Zero(19);
+			}
+			else {
+				state = getState();
+			}
+
+			// Acc AVG over measurements
+			// Counts the number of imu influenced in the current measurement, ignores outliers
+			int num_IMUs_avg = 0;
+			Eigen::Vector3d accMeasAvg = Eigen::Vector3d::Zero();
+
+			// 1. transform
+			for (int i = 0; i < accMeas.size(); i++) {
+				Eigen::Vector3d transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
+				if (isValidMeasurement(accelerometer, transformed_accMeas)) {
+					accMeasAvg += transformed_accMeas;
+					num_IMUs_avg++;
+				}
+			}
+			// 2. AVG
+			accMeasAvg /= num_IMUs_avg;
+
+			state(6) += accMeasAvg(0);
+			state(7) += accMeasAvg(1);
+			state(8) += accMeasAvg(2);
+
+			updateMeasurementCount(0);
+
+			setState(state);
+			return;
+		}
+	}
+
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
-		
+
 		// Acc AVG over measurements
 		// Counts the number of imu influenced in the current measurement, ignores outliers
 		int num_IMUs_avg = 0;
@@ -706,44 +676,53 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		std::cout << "ACC\n";
 
 	}
-	else {
-		Eigen::Vector3i measCount = getInitMeasurementCount();
-		Eigen::VectorXd state;
-		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
-			state = Eigen::VectorXd::Zero(19);
-		}
-		else {
-			state = getState();
-		}
-
-		// Acc AVG over measurements
-		// Counts the number of imu influenced in the current measurement, ignores outliers
-		int num_IMUs_avg = 0;
-		Eigen::Vector3d accMeasAvg = Eigen::Vector3d::Zero();
-		
-		// 1. transform
-		for (int i = 0; i< accMeas.size(); i++) {
-			Eigen::Vector3d transformed_accMeas = transform_Acc(accMeas[i], state.segment<3>(13), VIMU_Orientations[i], VIMU_Coords[i], state.segment<3>(16));
-			if (isValidMeasurement(accelerometer, transformed_accMeas)) {
-				accMeasAvg += transformed_accMeas;
-				num_IMUs_avg++;
-			}
-		}
-		// 2. AVG
-		accMeasAvg /= num_IMUs_avg;
-
-		state(6) += accMeasAvg(0);
-		state(7) += accMeasAvg(1);
-		state(8) += accMeasAvg(2);
-
-		updateMeasurementCount(0);
-
-		setState(state);
-	}
 
 
 };
 void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, double dt) {
+	if (!isInitialised()) {
+		if (initSamplingFinished()) {
+			setInitialStateAndCovariance();
+		}
+		else {
+
+			Eigen::VectorXi measCount = getInitMeasurementCounter();
+			Eigen::VectorXd state;
+			if (initProcedureStart()) { // Init State
+				state = Eigen::VectorXd::Zero(19);
+			}
+			else {
+				state = getState();
+			}
+
+
+			// MAG AVG over measurements
+			// Counts the number of imu influenced in the current measurement, ignores outliers
+			int num_IMUs_avg = 0;
+			Eigen::Vector3d magMeasAvg = Eigen::Vector3d::Zero();
+
+			// 1. transform
+			for (int i = 0; i < magMeas.size(); i++) {
+				Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
+				if (isValidMeasurement(gyroscope, transformed_magMeas)) {
+					magMeasAvg += transformed_magMeas;
+					num_IMUs_avg++;
+				}
+			}
+			// 2. AVG
+			magMeasAvg /= num_IMUs_avg;
+
+			// Use uninitialisied Quaternion state for placeholder
+			state(9) += magMeasAvg(0);
+			state(10) += magMeasAvg(1);
+			state(11) += magMeasAvg(2);
+
+			updateMeasurementCount(1);
+
+			setState(state);
+			return;
+		}
+	}
 
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -816,54 +795,16 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 		std::cout << "MAG\n";
 
 	}
-	else {
-
-		Eigen::Vector3i measCount = getInitMeasurementCount();
-		Eigen::VectorXd state;
-		if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
-			state = Eigen::VectorXd::Zero(19);
-		}
-		else {
-			state = getState();
-		}
-		
-		// MAG AVG over measurements
-		// Counts the number of imu influenced in the current measurement, ignores outliers
-		int num_IMUs_avg = 0;
-		Eigen::Vector3d magMeasAvg = Eigen::Vector3d::Zero();
-
-		// 1. transform
-		for (int i = 0; i < magMeas.size(); i++) {
-			Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
-			if (isValidMeasurement(gyroscope, transformed_magMeas)) {
-				magMeasAvg += transformed_magMeas;
-				num_IMUs_avg++;
-			}
-		}
-		// 2. AVG
-		magMeasAvg /= num_IMUs_avg;
-		
-		// Use uninitialisied Quaternion state for placeholder
-		state(9) += magMeasAvg(0);
-		state(10) += magMeasAvg(1);
-		state(11) += magMeasAvg(2);
-
-		updateMeasurementCount(1);
-
-		setState(state);
-	}
 
 };
 void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial) {
 
 
 	if (!isInitialised()) {
-		Eigen::Vector3i initMeasurementCount = getInitMeasurementCount(); // ist das hier auch mit 0 initialisiert??
-		uint8_t initMeasurements = getMinInitMeasurementCount();
 
-		if (initMeasurementCount(0) < initMeasurements || initMeasurementCount(1) < initMeasurements || initMeasurementCount(2) < initMeasurements) {
+		if (!initSamplingFinished()) {
 			Eigen::VectorXd state;
-			if (initMeasurementCount(0) == 0 && initMeasurementCount(1) == 0 && initMeasurementCount(2) == 0) {
+			if (initProcedureStart()) {
 				state = Eigen::VectorXd::Zero(19);
 			}
 			else {
@@ -876,8 +817,8 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 			// 1. transform
 			for (int i = 0; i < gpsMeas.size(); i++) {
-				if (isValidMeasurement(gps,gpsMeas[i])) {
-					gpsMeasAvg += gpsMeas[i] ;
+				if (isValidMeasurement(gps, gpsMeas[i])) {
+					gpsMeasAvg += gpsMeas[i];
 					num_IMUs_avg++;
 				}
 			}
@@ -893,7 +834,7 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 		}
 		else {
 			Eigen::VectorXd state = getState();
-			
+
 			// GPS AVG over measurements
 			// Counts the number of imu influenced in the current measurement, ignores outliers
 			int num_IMUs_avg = 0;
@@ -917,100 +858,13 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 			gpsMeas(1) += state(1);
 			gpsMeas(2) += 0;
 
-			gpsMeas = gpsMeas / (getInitMeasurementCount()(2) + 1); // mean of the init GPS Positions (11th measurement for GPS)
+			gpsMeas = gpsMeas / (getInitMeasurementCounter()(2) + 1); // mean of the init GPS Positions (11th measurement for GPS)
 
 			setReferenceGeodeticPosition(gpsMeas);
 
-			// set Reference to zero
-			state(0) = 0;
-			state(1) = 0;
-			state(2) = 0;
+			// Init of Orientation, State and Covariance
+			setInitialStateAndCovariance();
 
-			if (false) { // for velocity when added
-				state(3) = gpsVelocityInitial(0);
-				state(4) = gpsVelocityInitial(1);
-				state(5) = gpsVelocityInitial(2);
-			}
-			else {
-				state(3) = 0;
-				state(4) = 0;
-				state(5) = 0;
-			}
-			// Only is valid, if the sensor is stationary!!!
-			// Mean over acceleration init measurements
-			Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
-			initAcc = initAcc / initMeasurementCount(0);
-
-			// Determine Pitch and Roll from Accelerometer -> Elevation angle, has to be nearly zero
-			// compute pitch
-			double pitch = std::asin(initAcc(0) / g);
-
-			// compute roll -> turn/ bank angle, has also to be nearly zero
-			double param = initAcc(1) / initAcc(2);
-
-			double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
-
-			// Mean over magnetometer init measurements [with "Angle of Magnetic Declination" - Angle between magnetic and true north]
-			Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
-			initMag = initMag / initMeasurementCount(1);
-
-			// Determine Yaw from magnetometer
-			double yaw = std::atan2(initMag(1), initMag(0)); //m_y/m_x ich
-
-
-			yaw += declinationAngle;
-
-			Eigen::Quaternion<double> initOrientation = computeOrientation(yaw, pitch, roll);
-
-			state(9) = initOrientation.w();
-			state(10) = initOrientation.x();
-			state(11) = initOrientation.y();
-			state(12) = initOrientation.z();
-
-			// init the acceleration with the first Orientation from ("Body") XYD -> ("local") NED
-			initAcc = initOrientation._transformVector(initAcc);
-
-			state(6) = initAcc(0);
-			state(7) = initAcc(1);
-			state(8) = initAcc(2) + g;
-
-			//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3
-			// Fist Init of Covariane
-			Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(19, 19);
-
-			double gps_var{}, vel_var{}, acc_var{}, gyro_var{};
-			gps_var = GPS_POS_STD * GPS_POS_STD;
-			vel_var = INIT_VEL_STD * INIT_VEL_STD;
-			acc_var = ACCEL_STD * ACCEL_STD;
-			gyro_var = GYRO_STD * GYRO_STD;
-
-
-			covariance(0, 0) = gps_var;
-			covariance(1, 1) = gps_var;
-			covariance(2, 2) = gps_var;
-			covariance(3, 3) = vel_var;
-			covariance(4, 4) = vel_var;
-			covariance(5, 5) = vel_var;
-			covariance(6, 6) = acc_var;
-			covariance(7, 7) = acc_var;
-			covariance(8, 8) = acc_var;
-			covariance(13, 13) = gyro_var;
-			covariance(14, 14) = gyro_var;
-			covariance(15, 15) = gyro_var;
-			covariance(16, 16) = gyro_var;
-			covariance(17, 17) = gyro_var;
-			covariance(18, 18) = gyro_var;
-
-			// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
-			covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR,0,0,0,0,0,0;
-			covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
-			covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
-			covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, 0, 0, 0, 0, 0, 0;
-
-
-			setState(state);
-			setCovariance(covariance);
-			initFinished();
 		}
 	}
 	else {
@@ -1082,6 +936,166 @@ void VIMUExtendedKalmanFilter::federtatedStateAVG(std::vector<Eigen::VectorXd> s
 
 };
 
+void ExtendedKalmanFilter::setInitialStateAndCovariance() {
+	Eigen::VectorXd state = getState();
+
+	// No VIMU, INS from local IMU not centered of GPS Signal
+	Eigen::Vector3d coords = getCoords();
+	// set Reference to zero + the Coords of the (V)IMU in the construct
+	state(0) = 0 + coords(0);
+	state(1) = 0 + coords(1);
+	state(2) = 0 + coords(2);
+
+	// Init Velocity zero
+	state(3) = 0;
+	state(4) = 0;
+	state(5) = 0;
+
+	Eigen::Quaternion<double> initOrientation = computeInitOrientation(state);
+
+	state(9) = initOrientation.w();
+	state(10) = initOrientation.x();
+	state(11) = initOrientation.y();
+	state(12) = initOrientation.z();
+
+	Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
+	initAcc = initAcc / getInitMeasurementCounter()(0);
+	// init the acceleration with the first Orientation from ("Body") XYD -> ("local") NED
+	initAcc = initOrientation._transformVector(initAcc);
+
+	state(6) = initAcc(0);
+	state(7) = initAcc(1);
+	state(8) = initAcc(2) + g;
+
+
+
+	//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3
+		// Fist Init of Covariane
+	Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(13, 13);
+
+	double gps_var{}, vel_var{}, acc_var{};
+	gps_var = GPS_POS_STD * GPS_POS_STD;
+	vel_var = INIT_VEL_STD * INIT_VEL_STD;
+	acc_var = ACCEL_STD * ACCEL_STD;
+
+
+	covariance(0, 0) = gps_var;
+	covariance(1, 1) = gps_var;
+	covariance(2, 2) = gps_var;
+	covariance(3, 3) = vel_var;
+	covariance(4, 4) = vel_var;
+	covariance(5, 5) = vel_var;
+	covariance(6, 6) = acc_var;
+	covariance(7, 7) = acc_var;
+	covariance(8, 8) = acc_var;
+
+	// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
+	covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
+	covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR;
+	covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR;
+	covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR;
+
+	setState(state);
+	setCovariance(covariance);
+	initFinished();
+
+}
+
+void VIMUExtendedKalmanFilter::setInitialStateAndCovariance() {
+	Eigen::VectorXd state = getState();
+	// set Reference Position to zero
+	state(0) = 0;
+	state(1) = 0;
+	state(2) = 0;
+
+	// Init Velocity zero
+	state(3) = 0;
+	state(4) = 0;
+	state(5) = 0;
+
+	Eigen::Quaternion<double> initOrientation = computeInitOrientation(state);
+
+	state(9) = initOrientation.w();
+	state(10) = initOrientation.x();
+	state(11) = initOrientation.y();
+	state(12) = initOrientation.z();
+
+
+	Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
+	initAcc = initAcc / getInitMeasurementCounter()(0);
+	// init the acceleration with the first Orientation from ("Body") XYD -> ("local") NED
+	initAcc = initOrientation._transformVector(initAcc);
+
+	state(6) = initAcc(0);
+	state(7) = initAcc(1);
+	state(8) = initAcc(2) + g;
+
+	//	state = x, y, z, x_dot, y_dot, z_dot, x_dot_dot, y_dot_dot, z_dot_dot, q0, q1, q2, q3, x_psi_dot, y_psi_dot, z_psi_dot, x_psi_dot_dot, y_psi_dot_dot, z_psi_dot_dot
+// Fist Init of Covariane
+	Eigen::MatrixXd covariance = Eigen::MatrixXd::Zero(19, 19);
+
+	double gps_var{}, vel_var{}, acc_var{}, gyro_var{};
+	gps_var = GPS_POS_STD * GPS_POS_STD;
+	vel_var = INIT_VEL_STD * INIT_VEL_STD;
+	acc_var = ACCEL_STD * ACCEL_STD;
+	gyro_var = GYRO_STD * GYRO_STD;
+
+	covariance(0, 0) = gps_var;
+	covariance(1, 1) = gps_var;
+	covariance(2, 2) = gps_var;
+	covariance(3, 3) = vel_var;
+	covariance(4, 4) = vel_var;
+	covariance(5, 5) = vel_var;
+	covariance(6, 6) = acc_var;
+	covariance(7, 7) = acc_var;
+	covariance(8, 8) = acc_var;
+	covariance(13, 13) = gyro_var;
+	covariance(14, 14) = gyro_var;
+	covariance(15, 15) = gyro_var;
+	covariance(16, 16) = gyro_var;
+	covariance(17, 17) = gyro_var;
+	covariance(18, 18) = gyro_var;
+
+	// Use P0 from "A double stage kalman filter for orientation and Tracking with an IMU..."
+	covariance.row(9) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
+	covariance.row(10) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
+	covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
+	covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, 0, 0, 0, 0, 0, 0;
+
+
+
+	setState(state);
+	setCovariance(covariance);
+	initFinished();
+}
+
+
+Eigen::Quaternion<double> ExtendedKalmanFilterBase::computeInitOrientation(Eigen::VectorXd state) {
+	// Only is valid, if the sensor is stationary!!!
+				// Mean over acceleration init measurements
+	Eigen::Vector3d initAcc = Eigen::Vector3d{ state(6), state(7), state(8) };
+	initAcc = initAcc / getInitMeasurementCounter()(0);
+
+	// Determine Pitch and Roll from Accelerometer -> Elevation angle, has to be nearly zero
+	// compute pitch
+	double pitch = std::asin(initAcc(0) / g);
+
+	// compute roll -> turn/ bank angle, has also to be nearly zero
+	double param = initAcc(1) / initAcc(2);
+
+	double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
+
+	// Mean over magnetometer init measurements [with "Angle of Magnetic Declination" - Angle between magnetic and true north]
+	Eigen::Vector3d initMag = Eigen::Vector3d{ state(9), state(10), state(11) };
+	initMag = initMag / getInitMeasurementCounter()(1);
+
+	// Determine Yaw from magnetometer
+	double yaw = std::atan2(initMag(1), initMag(0)); //m_y/m_x ich
+
+	yaw += declinationAngle;
+
+	return computeOrientation(yaw, pitch, roll);
+}
 
 // sequence is ZYX -> Yaw, Pitch, Roll : Is it adaequat?? 1 of 12 possibilities
 // Quaternion & Rotation Sequences p.167
@@ -1114,20 +1128,21 @@ Eigen::Quaternion<double> ExtendedKalmanFilterBase::computeOrientation(double ya
 	return q;
 }
 
-// Maha.... Distance check for incoming Measurement, if its to wide outlying -> not what we expect, primaryly GPS
+// Mahalanobis Distance check for incoming Measurement, if its to wide outlying -> not what we expect, primaryly GPS
+// now outliers just, when it is too unrealistic
 bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vector3d meas) {
 	switch (sensor)
 	{
-	case gyroscope: 
+	case gyroscope:
 		return true;
-	case accelerometer: 
+	case accelerometer:
 		if (meas.norm() >= 30) {
 			return false;
 		}
 		else {
 			return true;
 		}
-	case magnetometer: 
+	case magnetometer:
 		return true;
 	case gps:
 		if (abs(meas(0) - ref_lat) > 1) {
@@ -1140,6 +1155,26 @@ bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vect
 			return true;
 		}
 	};
+}
+
+bool ExtendedKalmanFilterBase::initSamplingFinished() {
+
+	for (int i = 0; i < initMeasurementCounter.size(); i++) {
+		if (initMeasurementCounter(i) < minInitMeasurements) {
+			return false;
+		}
+	}
+	return true;
+
+}
+
+bool ExtendedKalmanFilterBase::initProcedureStart() {
+	for (int i = 0; i < initMeasurementCounter.size(); i++) {
+		if (initMeasurementCounter(i) != 0) {
+			return false;
+		}
+	}
+	return true;
 }
 
 
@@ -1213,3 +1248,9 @@ bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vect
 //F(18, 18);
 //
 //state = F * state;
+
+	//if (false) { // for velocity when added
+			//	state(3) = gpsVelocityInitial(0);
+			//	state(4) = gpsVelocityInitial(1); 
+			//	state(5) = gpsVelocityInitial(2);
+			//}
