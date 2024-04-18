@@ -7,6 +7,7 @@
 #include <math.h>
 #include "sensors.h"
 #include "extendedkalmanfilter.h"
+#include "Configuration.h"
 
 // 8851 Daten sind da drin vorhanden
 // In welcher Einheit sind die Sekunden angegeben? Laut Abgabe in Microsekunden
@@ -21,10 +22,10 @@ constexpr double g = 9.81;
 // Flag fuer die Estimation Fusion
 constexpr bool estimation_fusion = true;
 
-
 // reference values to detect outliers simple way
 constexpr double ref_lat = 51.0;
 constexpr double ref_long = 7.0;
+double time_constant = 1e6;
 
 
 struct INS_state {
@@ -201,88 +202,7 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 				meas.push_back(gpsMeas[row_gps]);
 			}
 
-			/*
-			* First GPS "naive" try in a fusion center, but the estimate is diverging
-			*/
-			// verschieben der GPS Position um Position im Konstrukt 
-							// Mitteln der Werte, um die Fusion in dem Punkt zu machen
-			// GPS Fusion in VIMU and not in the IMUs itself
-			//if (init) {
-
-			//
-
-			//	Eigen::VectorXd state_VIMU, state_IMU_augmented;
-			//	state_VIMU = centralized_ins.vekf.getState();
-			//	for (INS* ins : centralized_ins.inss) {
-			//		// Sum up the State-Vectors from all IMUs
-
-			//		state_IMU_augmented = Eigen::VectorXd::Zero(19);
-			//		state_IMU_augmented.head(13) = ins->ekf.getState();
-			//		
-			//		std::cout << "State IMU: " << ins->imu_port <<":\n" << state_IMU_augmented << std::endl;
-
-			//		centralized_ins.vekf.setState(state_VIMU + state_IMU_augmented);
-			//	}
-			//	//std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
-
-
-			//	Eigen::VectorXd avg_state = centralized_ins.vekf.getState();
-			//	avg_state /= num_IMUs;
-
-			//	centralized_ins.vekf.setState(avg_state);
-
-			//	std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
-
-
-			//	centralized_ins.vekf.updateGPS(meas, dt_gps);
-
-			//	// Update the central state in the IMU state
-			//	// What states have to be updated? All or position only? Information sharing only the Position! velocity & acc & Orientation maybe too
-			//	Eigen::VectorXd state = centralized_ins.vekf.getState();
-			//	double x = state(0);
-			//	double y = state(1);
-			//	double z = state(2);
-
-			//	Eigen::Vector3d position_avg{ x, y, z };
-
-
-			//	double q_0 = state(9);
-			//	double q_1 = state(10);
-			//	double q_2 = state(11);
-			//	double q_3 = state(12);
-
-			//	Eigen::Vector4d orientation_avg{ q_0,q_1,q_2,q_3 };
-
-			//	for (INS* ins : centralized_ins.inss)
-			//	{
-			//		Eigen::VectorXd state_IMU = ins->ekf.getState();
-			//		state_IMU.segment<3>(0) = position_avg + ins->ekf.getCoords();
-			//		state_IMU.segment<4>(9) = orientation_avg;
-			//		ins->ekf.setState(state_IMU);
-			//	}
-
-
-			//}
-			//else {
-
-			//	Eigen::Vector3d gpsMeasAvg = Eigen::Vector3d::Zero();
-			//	int num_IMUs_avg = 0;
-			//	// 1. transform
-			//	for (int i = 0; i < meas.size(); i++) {
-			//		if (centralized_ins.vekf.isValidMeasurement(gps, meas[i])) {
-			//			gpsMeasAvg += meas[i];
-			//			num_IMUs_avg++;
-			//		}
-			//	}
-			//	gpsMeasAvg /= num_IMUs_avg;
-
-			//	for (INS* ins : centralized_ins.inss)
-			//	{
-			//		ins->ekf.updateGPS(gpsMeasAvg, dt_gps);
-
-			//	}
-			//}
-
+		
 
 			/*
 			* Second try with the "naive" Fusion in a Fusion Center, that is not a EKF
@@ -313,7 +233,7 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 
 
 		if (init) {
-			
+
 			std::vector<INS_state> ins_states = std::vector<INS_state>();
 			INS_state ins_state;
 			for (INS* ins : centralized_ins.inss) {
@@ -331,10 +251,10 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins) {
 
 		//	state = fusion_center.state;
 
-			state = centralized_ins.inss[1]->ekf.getState();
+			state = centralized_ins.inss[3]->ekf.getState();
 
 
-			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_imu_1.txt", std::ios_base::app);
+			state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/position_xyz_imu_7.txt", std::ios_base::app);
 			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
@@ -502,44 +422,80 @@ void get_calibrated_meas(INS& ins) {
 
 }
 
-struct Orientation_new {
-	Eigen::Quaternion<double> o_imu_0{ -0.398, 0.444, -0.769, 0.23 };
-	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
-	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
-	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
-} orient_new;
-
-struct Orientation_old {
-	Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
-	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
-	Eigen::Quaternion<double> o_imu_6{ -0.39807, -0.44399, 0.76902, 0.22983 };
-	Eigen::Quaternion<double> o_imu_7{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
-} orient_old;
+void fuse(Configuration configuration) {
+	
+}
 
 
 int main()
 {
 
+	// Orientation of the IMUs in the previous thesis
+	Orientation orientation_bochum{};
+	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ -0.23 , -0.769, -0.444, -0.398 };
+	orientation_bochum.o_imu_1 = Eigen::Quaternion<double> { -0.23, 0.119, 0.444, 0.858 };
+	orientation_bochum.o_imu_6 = Eigen::Quaternion<double> { -0.39807, -0.44399, 0.76902, 0.22983 };
+	orientation_bochum.o_imu_7 = Eigen::Quaternion<double> { 0.85781 ,0.44404, -0.11898 , 0.22985 };
+
+	// Orientation of the IMUs in Test Data Aquisition from 18.4.2024
+	Orientation orientation_froemern{};
+	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
+	orientation_bochum.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
+	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
+	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
+
+
+	/*
+	* Create Configs for the different test data
+	*/
+
+	// Testdata Bochum
+	Configuration bochum_raw = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/");
+
+	Configuration bochum_federated = Configuration("bochum_raw", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/", FusionMethod::Federated);
+
+
+	fuse()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	double time_constant{};
-	std::string data_IMU_path{};
-
-	// Flag fuer die Orientation
-	bool new_orientation = false;
-
 	// read in of datafiles with the coloum structure:
 	// Time [us]	ACC_X [mg]	ACC_Y [mg]	ACC_Z [mg]	GYRO_X [dps]	GYRO_Y [dps]	GYRO_Z [dps]	MAG_X [uT]	MAG_Y [uT]	MAG_Z [uT]
 
-	if (new_orientation) {
-		time_constant = 1e3;
-		data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_";
-	}
-	else {
-		time_constant = 1e6;
-		data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_";
-	}
+	//if (new_orientation) {
+	//	time_constant = 1e3;
+	//	data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/new_data_from_sd/IMU_";
+	//}
+	//if (new_orientation) {
+	//	time_constant = 1e6;
+	//	data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/DatalogsVeit/FroemernFahrt18.4.2024/IMU_";
+	//}
+	//else {
+	//			data_IMU_path = "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_";
+	//}
 
-	// Time [us], Latitude [deg], Longitude Degree[deg] 
-	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
 
 
 	// Define INS1
@@ -648,13 +604,11 @@ int main()
 
 	}
 
-	/*for (row = 0; row < 1000; row++) {
-		if (cm_INS.inss[0]->timeDataIMU[row] == 24460314.0 / 1e6) {
-			std::cout << row << std::endl;
-		}
 
-	}
-*/
+	// Time [us], Latitude [deg], Longitude Degree[deg]
+	std::string data_GPS_path{ "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_" };
+
+
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 		std::stringstream filepath{};
 		filepath << data_GPS_path << gps_number + 1 << "/GPS_" << gps_number + 1 << "_data.txt";
@@ -703,80 +657,144 @@ int main()
 
 }
 
-//// Acceleration in m/s2 & Gyro Rate in rad
-//ins->imuData[row].accelMeas(0) = ins->imuData[row].accelMeas(0) * g / 1000.0;
-//ins->imuData[row].accelMeas(1) = ins->imuData[row].accelMeas(1) * g / 1000.0;
-//ins->imuData[row].accelMeas(2) = ins->imuData[row].accelMeas(2) * g / 1000.0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+* Old, but maybe important code
+*/
+
+
+
+/*
+		* First GPS "naive" try in a fusion center, but the estimate is diverging
+		*/
+		// verschieben der GPS Position um Position im Konstrukt 
+						// Mitteln der Werte, um die Fusion in dem Punkt zu machen
+		// GPS Fusion in VIMU and not in the IMUs itself
+		//if (init) {
+
+		//
+
+		//	Eigen::VectorXd state_VIMU, state_IMU_augmented;
+		//	state_VIMU = centralized_ins.vekf.getState();
+		//	for (INS* ins : centralized_ins.inss) {
+		//		// Sum up the State-Vectors from all IMUs
+
+		//		state_IMU_augmented = Eigen::VectorXd::Zero(19);
+		//		state_IMU_augmented.head(13) = ins->ekf.getState();
+		//		
+		//		std::cout << "State IMU: " << ins->imu_port <<":\n" << state_IMU_augmented << std::endl;
+
+		//		centralized_ins.vekf.setState(state_VIMU + state_IMU_augmented);
+		//	}
+		//	//std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
+
+
+		//	Eigen::VectorXd avg_state = centralized_ins.vekf.getState();
+		//	avg_state /= num_IMUs;
+
+		//	centralized_ins.vekf.setState(avg_state);
+
+		//	std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
+
+
+		//	centralized_ins.vekf.updateGPS(meas, dt_gps);
+
+		//	// Update the central state in the IMU state
+		//	// What states have to be updated? All or position only? Information sharing only the Position! velocity & acc & Orientation maybe too
+		//	Eigen::VectorXd state = centralized_ins.vekf.getState();
+		//	double x = state(0);
+		//	double y = state(1);
+		//	double z = state(2);
+
+		//	Eigen::Vector3d position_avg{ x, y, z };
+
+
+		//	double q_0 = state(9);
+		//	double q_1 = state(10);
+		//	double q_2 = state(11);
+		//	double q_3 = state(12);
+
+		//	Eigen::Vector4d orientation_avg{ q_0,q_1,q_2,q_3 };
+
+		//	for (INS* ins : centralized_ins.inss)
+		//	{
+		//		Eigen::VectorXd state_IMU = ins->ekf.getState();
+		//		state_IMU.segment<3>(0) = position_avg + ins->ekf.getCoords();
+		//		state_IMU.segment<4>(9) = orientation_avg;
+		//		ins->ekf.setState(state_IMU);
+		//	}
+
+
+		//}
+		//else {
+
+		//	Eigen::Vector3d gpsMeasAvg = Eigen::Vector3d::Zero();
+		//	int num_IMUs_avg = 0;
+		//	// 1. transform
+		//	for (int i = 0; i < meas.size(); i++) {
+		//		if (centralized_ins.vekf.isValidMeasurement(gps, meas[i])) {
+		//			gpsMeasAvg += meas[i];
+		//			num_IMUs_avg++;
+		//		}
+		//	}
+		//	gpsMeasAvg /= num_IMUs_avg;
+
+		//	for (INS* ins : centralized_ins.inss)
+		//	{
+		//		ins->ekf.updateGPS(gpsMeasAvg, dt_gps);
+
+		//	}
+		//}
+
+
+
+
+// Orientation from the calibration of the IMUs and samples (MCU is not neccessary in the middle of the object)
+//struct Orientation_new {
+//	Eigen::Quaternion<double> o_imu_0{ -0.398, 0.444, -0.769, 0.23 };
+//	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
+//	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
+//	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
+//} orient_new;
+
+
+//struct Orientation_new {
+//	Eigen::Quaternion<double> o_imu_0{ 0.23, 0.769, 0.444, 0.398 };
+//	Eigen::Quaternion<double> o_imu_1{ -0.858,0.444,-0.119,-0.23 };
+//	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
+//	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
+//} orient_new;
 //
-//ins->imuData[row].gyroMeas(0) = ins->imuData[row].gyroMeas(0) * M_PI / 180.0;
-//ins->imuData[row].gyroMeas(1) = ins->imuData[row].gyroMeas(1) * M_PI / 180.0;
-//ins->imuData[row].gyroMeas(2) = ins->imuData[row].gyroMeas(2) * M_PI / 180.0;
 
+//struct Orientation_old {
+//	Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
+//	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
+//	Eigen::Quaternion<double> o_imu_6{ -0.39807, -0.44399, 0.76902, 0.22983 };
+//	Eigen::Quaternion<double> o_imu_7{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
+//} orient_old;
 
-/*coloumn = 0;
-		   while (coloumn < 10)
-		   {
-			   if (coloumn != 9)
-			   {
-				   delimiter = "\t";
-			   }
-			   else
-			   {
-				   delimiter = "\r";
-			   }
-			   pos = values.find(delimiter);
-
-			   data = values.substr(0, pos);
-			   float number = std::stof(data);
-			   if (coloumn == 0)
-			   {
-				   ins.timeData[row] = std::stod(data);
-			   }
-			   if (coloumn == 1)
-			   {
-				   ins.accMeas[row].x_dot_dot = std::stod(data);
-			   }
-			   if (coloumn == 2)
-			   {
-				   ins.accMeas[row].y_dot_dot = std::stod(data);
-			   }
-			   if (coloumn == 3)
-			   {
-				   ins.accMeas[row].z_dot_dot = std::stod(data);
-			   }
-			   if (coloumn == 4)
-			   {
-				   ins.gyroMeas[row].psi_dot_x = std::stod(data) * M_PI / 180.0;
-			   }
-			   if (coloumn == 5)
-			   {
-				   ins.gyroMeas[row].psi_dot_y = std::stod(data) * M_PI / 180.0;
-			   }
-			   if (coloumn == 6)
-			   {
-				   ins.gyroMeas[row].psi_dot_z = std::stod(data) * M_PI / 180.0;
-			   }
-			   if (coloumn == 7)
-			   {
-				   ins.magMeas[row].B_x = std::stod(data);
-			   }
-			   if (coloumn == 8)
-			   {
-				   ins.magMeas[row].B_y = std::stod(data);
-			   }
-			   if (coloumn == 9)
-			   {
-				   ins.magMeas[row].B_z = std::stod(data);
-			   }
-			   values.erase(0, pos + delimiter.length());
-			   coloumn++;
-		   }*/
-
-
-		   //Eigen::Vector3d transformToVector(double& data_1, double& data_2, double& data_3) {
-		   //	//	Eigen::Vector3d data = Eigen::Vector3d::Zero();
-		   //	//	data << data_1, data_2, data_3;
-		   //	//	return data;
-		   //	//}
 
 

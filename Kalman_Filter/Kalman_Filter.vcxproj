@@ -132,6 +132,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Configuration.h" />
     <ClInclude Include="fusion.h" />
     <ClInclude Include="extendedkalmanfilter.h" />
     <ClInclude Include="coordTransformation.h" />
