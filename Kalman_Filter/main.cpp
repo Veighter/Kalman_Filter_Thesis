@@ -13,8 +13,8 @@
 // In welcher Einheit sind die Sekunden angegeben? Laut Abgabe in Microsekunden
 // alle 2 sekunden kommt ein GPS rein
 using namespace sensorMeas;
-constexpr int IMU_DATA_ROWS = 8727;
-constexpr int GPS_DATA_ROWS = 870;
+int IMU_DATA_ROWS = 0;//8727; // noch nicht dynamisch angepasst fuer die Froemern Fahrt
+int GPS_DATA_ROWS = 0;//870; // muss dynamisch sein
 constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
@@ -60,12 +60,12 @@ struct INS
 	int imu_port{}; // connect port on the multiplexer
 
 	// IMU specific Data
-	std::vector<double> timeDataIMU{ std::vector<double>(IMU_DATA_ROWS) };
-	std::vector<IMU_Data> imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
+	std::vector<double> timeDataIMU{ std::vector<double>() };
+	std::vector<IMU_Data> imuData{ std::vector<IMU_Data>() };
 
 	// GPS specific Data
-	std::vector<double> timeDataGPS{ std::vector<double>(GPS_DATA_ROWS) };
-	std::vector<Eigen::Vector3d> GPSData{ std::vector<Eigen::Vector3d>(GPS_DATA_ROWS) };
+	std::vector<double> timeDataGPS{ std::vector<double>() };
+	std::vector<Eigen::Vector3d> GPSData{ std::vector<Eigen::Vector3d>() };
 
 	ExtendedKalmanFilter ekf{};
 
@@ -78,13 +78,13 @@ struct INS
 /// ekf: Extended Kalman-Filter in the center of mass for interpreting the (calibrated) and averaged raw sensor data in the Center Of Mass
 /// </summary>
 struct CM_INS {
-	std::vector<double> timeDataIMU{ std::vector<double>(IMU_DATA_ROWS) };
-	std::vector<IMU_Data> centralized_imuData{ std::vector<IMU_Data>(IMU_DATA_ROWS) };
+	std::vector<double> timeDataIMU{ std::vector<double>() };
+	std::vector<IMU_Data> centralized_imuData{ std::vector<IMU_Data>() };
 
-	std::vector<double> timeDataGPS{ std::vector<double>(GPS_DATA_ROWS) };
+	std::vector<double> timeDataGPS{ std::vector<double>() };
 
 	// 2 D Vector of the 3 GPS
-	std::vector<std::vector<Eigen::Vector3d>> GPSData{ num_GPSs,std::vector<Eigen::Vector3d>(GPS_DATA_ROWS) };
+	std::vector<std::vector<Eigen::Vector3d>> GPSData{ num_GPSs,std::vector<Eigen::Vector3d>() };
 
 	INS* inss[num_IMUs]{};
 	ExtendedKalmanFilter ekf{};
@@ -120,7 +120,6 @@ Eigen::Vector3d transform_Accel(int row, const INS& ins, const Eigen::Quaternion
 }
 
 
-//
 /// <summary>
 /// Transforms the measurements of the INS IMU Information at position distinct from Center Of Mass to VIMU Values in Center of Mass
 /// </summary>
@@ -139,7 +138,10 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 
 INS_state naiveFusion(const std::vector<INS_state>& localTracks);
 
-void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {};
+/*
+* Raw Fusion
+*/
+
 void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix) {
 
 	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
@@ -157,7 +159,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 		VIMU_Coords.push_back(ins->ekf.getCoords());
 	}
 
-	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionInit::MAG,num_IMUs, VIMU_Orientations, VIMU_Coords);
+	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionInit::MAG, num_IMUs, VIMU_Orientations, VIMU_Coords);
 
 	double dt_imu{};
 	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
@@ -216,7 +218,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 		}
 		meas.clear();
 		row_imu++;
-			}
+	}
 
 
 };
@@ -337,7 +339,7 @@ void multiple_imu_fusion_estimation_gps(CM_INS& centralized_ins, std::string fil
 
 				//	state = centralized_ins.vekf.getState();
 
-			
+
 			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_estimation_fusion_" + file_appendix + ".txt";
 
 			state_writer.open(path_time, std::ios_base::app);
@@ -391,6 +393,12 @@ INS_state naiveFusion(const std::vector<INS_state>& localTracks) {
 	return fusion_center;
 }
 
+
+/*
+* Estimation Fusion
+*/
+
+void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {};
 
 void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appendix) {
 
@@ -571,13 +579,12 @@ void init_local_INS(Orientation& orientation) {
 	ins_4.ekf.setOrientation(orientation.o_imu_7);
 }
 
-int read_imu_data(std::string data_IMU_path) {
-	int row = 0;
+int read_imu_data(std::string data_IMU_path, char delimiter) {
 	// Einlesen der Messdaten in die IMUs 
 	for (INS* ins : cm_INS.inss)
 	{
 		std::stringstream filepath{};
-		filepath << data_IMU_path << ins->imu_port << "_data.txt";
+		filepath << data_IMU_path << "/IMU_" << ins->imu_port << "_data.txt";
 		std::ifstream data_IMU{ filepath.str() };
 
 		if (!data_IMU.is_open())
@@ -586,39 +593,51 @@ int read_imu_data(std::string data_IMU_path) {
 			return 1; // Rückgabe eines Fehlercodes
 		}
 
-		for (std::string values; std::getline(data_IMU, values) && row < IMU_DATA_ROWS; row++)
+		double time{};
+		IMU_Data imuData{};
+		Eigen::Vector3d accelMeas{};
+		Eigen::Vector3d magMeas{};
+		Eigen::Vector3d gyroMeas{};
+		IMU_DATA_ROWS = 0;
+
+
+		for (std::string values; std::getline(data_IMU, values, delimiter);)
 		{
 
 			std::istringstream iss(values);
 
-			iss >> ins->timeDataIMU[row];
-
-			iss >> ins->imuData[row].accelMeas[0] >> ins->imuData[row].accelMeas[1] >> ins->imuData[row].accelMeas[2];
-
-			iss >> ins->imuData[row].gyroMeas[0] >> ins->imuData[row].gyroMeas[1] >> ins->imuData[row].gyroMeas[2];
-
-			iss >> ins->imuData[row].magMeas[0] >> ins->imuData[row].magMeas[1] >> ins->imuData[row].magMeas[2];
+			iss >> time;
 
 			// Time in seconds
-			ins->timeDataIMU[row] /= time_constant; // convert from us -> s (ony for the old data, new is in ms 1e3
+			time /= time_constant;
+			ins->timeDataIMU.push_back(time);
 
+			iss >> accelMeas[0] >> accelMeas[1] >> accelMeas[2];
+
+			iss >> gyroMeas[0] >> gyroMeas[1] >> gyroMeas[2];
+
+			iss >> magMeas[0] >> magMeas[1] >> magMeas[2];
+
+			imuData.accelMeas = accelMeas;
+			imuData.gyroMeas = gyroMeas;
+			imuData.magMeas = magMeas;
+
+			ins->imuData.push_back(imuData);
+
+			IMU_DATA_ROWS++;
 
 		}
-		row = 0;
-
 	}
 	return 0;
 
 }
 
-int read_gps_data(std::string data_GPS_path) {
-	int row = 0;
-
+int read_gps_data(std::string data_GPS_path, char delimiter) {
 	// Dataformat: Time [us], Latitude [deg], Longitude Degree[deg]
 
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 		std::stringstream filepath{};
-		filepath << data_GPS_path << gps_number + 1 << "_data.txt";
+		filepath << data_GPS_path << "/GPS_" << gps_number + 1 << "_data.txt";
 		std::ifstream data_GPS{ filepath.str() };
 
 		if (!data_GPS.is_open())
@@ -627,19 +646,27 @@ int read_gps_data(std::string data_GPS_path) {
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
 			return 1; // Rückgabe eines Fehlercodes
 		}
-		row = 0;
-		for (std::string values; std::getline(data_GPS, values) && row < GPS_DATA_ROWS; row++)
+		
+		double time;
+		Eigen::Vector3d GPSData;
+		GPS_DATA_ROWS = 0;
+
+		for (std::string values; std::getline(data_GPS, values, delimiter);)
 		{
 			std::istringstream iss(values);
 
-			iss >> cm_INS.timeDataGPS[row];
-			cm_INS.timeDataGPS[row] /= 1e6;
+			iss >> time;
+			time /= time_constant;
+			cm_INS.timeDataGPS.push_back(time);
 
 			// Latitude, Longitude
-			iss >> cm_INS.GPSData[gps_number][row](0) >> cm_INS.GPSData[gps_number][row](1);
+			iss >> GPSData(0) >> GPSData(1);
 
 			// Altitude
-			cm_INS.GPSData[gps_number][row](2) = 0;
+			GPSData(2) = 0;
+
+			cm_INS.GPSData[gps_number].push_back(GPSData);
+			GPS_DATA_ROWS++;
 		}
 
 	}
@@ -657,10 +684,10 @@ void fuse(Configuration& configuration) {
 	cm_INS.inss[2] = &ins_3;
 	cm_INS.inss[3] = &ins_4;
 
-	read_imu_data(configuration.getIMU_Data_Path());
+	read_imu_data(configuration.getIMU_Data_Path(), configuration.getDelimiter());
 
 	if (fusion_method == FusionMethod::Raw_GPS || fusion_method == FusionMethod::Federated_GPS) {
-		read_gps_data(configuration.getGPS_Data_Path());
+		read_gps_data(configuration.getGPS_Data_Path(), configuration.getDelimiter());
 	}
 
 	for (INS* ins : cm_INS.inss) {
@@ -702,17 +729,33 @@ int main()
 	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
 	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
 
+	/*
+	* Format of the Input Data
+	* With Tabs or Comma as Delimiter .txt file
+	*
+	* Time [ms],ACC_X [mg],ACC_Y [mg],ACC_Z [mg],GYRO_X [dps],GYRO_Y [dps],GYRO_Z [dps],MAG_X [uT],MAG_Y [uT],MAG_Z [uT]
+	*/
 
 	/*
 	* Create Configs for the different test data
 	*/
 	// Testdata Bochum
-	Configuration bochum_raw_gps = Configuration("bochum_raw_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_", FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_", FusionMethod::Raw_GPS);
+	Configuration bochum_raw_gps = Configuration("bochum_raw_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", '\t', FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Raw_GPS);
 
-	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/IMU_",FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd/GPS_", FusionMethod::Federated_GPS);
+	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", '\t', FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS);
 
-//	fuse(bochum_raw_gps);
-	fuse(bochum_federated_gps);
+	fuse(bochum_raw_gps);
+	//fuse(bochum_federated_gps);
+
+
+	/*
+	* Create Configs for Froemern Drive 18.4
+	*/
+	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt 18.4.2024/Konstrukt Daten", ',', FusionInit::MAG);
+
+	Configuration froemern_federtaed = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt 18.4.2024/Konstrukt Daten", ',', FusionInit::MAG);
+
+	//	fuse(froemern_raw);
 
 	return 0;
 
