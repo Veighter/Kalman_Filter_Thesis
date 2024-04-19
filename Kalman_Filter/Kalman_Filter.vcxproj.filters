@@ -32,9 +32,6 @@
     <ClInclude Include="extendedkalmanfilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="fusion.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="coordTransformation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -42,6 +39,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Configuration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Fusion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

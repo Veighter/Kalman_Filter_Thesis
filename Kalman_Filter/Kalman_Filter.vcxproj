@@ -133,9 +133,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Configuration.h" />
-    <ClInclude Include="fusion.h" />
     <ClInclude Include="extendedkalmanfilter.h" />
     <ClInclude Include="coordTransformation.h" />
+    <ClInclude Include="Fusion.h" />
     <ClInclude Include="sensors.h" />
     <ClInclude Include="vimuextendedkalmanfilter.h" />
   </ItemGroup>

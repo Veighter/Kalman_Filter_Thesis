@@ -126,7 +126,7 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GYRO IMU\n";
+	//	std::cout << "GYRO IMU\n";
 	}
 
 }
@@ -141,16 +141,13 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 			setInitialStateAndCovariance();
 		}
 		else {
-
-			Eigen::Vector3i measCount = getInitMeasurementCounter();
 			Eigen::VectorXd state;
-			if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) {
+			if (initProcedureStart()) {
 				state = Eigen::VectorXd::Zero(13);
 			}
 			else {
 				state = getState();
 			}
-
 			// Transformation from Sensor Acc to vehicle Body Acc
 			accMeas = transform_Acc(accMeas);
 
@@ -241,7 +238,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "ACC IMU\n";
+	//	std::cout << "ACC IMU\n";
 
 	}
 
@@ -254,11 +251,8 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 			setInitialStateAndCovariance();
 		}
 		else {
-
-
-			Eigen::Vector3i measCount = getInitMeasurementCounter();
 			Eigen::VectorXd state;
-			if (measCount(0) == 0 && measCount(1) == 0 && measCount(2) == 0) { // Init State
+			if (initProcedureStart()) { // Init State
 				state = Eigen::VectorXd::Zero(13);
 			}
 			else {
@@ -334,7 +328,7 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "MAG\n";
+	//	std::cout << "MAG\n";
 
 	}
 
@@ -416,7 +410,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GPS IMU\n";
+	//	std::cout << "GPS IMU\n";
 	}
 
 }
@@ -531,7 +525,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GYRO\n";
+	//	std::cout << "GYRO\n";
 	}
 };
 
@@ -543,8 +537,6 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 			setInitialStateAndCovariance();
 		}
 		else {
-
-			Eigen::VectorXi measCount = getInitMeasurementCounter();
 			Eigen::VectorXd state;
 			if (initProcedureStart()) {
 				state = Eigen::VectorXd::Zero(19);
@@ -673,7 +665,7 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "ACC\n";
+	//	std::cout << "ACC\n";
 
 	}
 
@@ -685,8 +677,6 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 			setInitialStateAndCovariance();
 		}
 		else {
-
-			Eigen::VectorXi measCount = getInitMeasurementCounter();
 			Eigen::VectorXd state;
 			if (initProcedureStart()) { // Init State
 				state = Eigen::VectorXd::Zero(19);
@@ -792,7 +782,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "MAG\n";
+	//	std::cout << "MAG\n";
 
 	}
 
@@ -800,8 +790,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial) {
 
 
-	if (!isInitialised()) {
-
+	if (!isInitialised()) { // evtl hier nochmal ueberarbeiten
 		if (!initSamplingFinished()) {
 			Eigen::VectorXd state;
 			if (initProcedureStart()) {
@@ -916,7 +905,7 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-		std::cout << "GPS\n";
+	//	std::cout << "GPS\n";
 	}
 
 

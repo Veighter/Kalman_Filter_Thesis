@@ -4,14 +4,8 @@
 #include <vector>
 #include <Eigen\Dense>
 #include "coordTransformation.h"
+#include "Fusion.h"
 
-/// <summary>
-/// Fusion Configurations, priori knowledge for the initialisation
-/// </summary>
-enum class FusionConfig {
-	MAG, // Magnetometer, Accelerometer, Gyroskop
-	MAGGPS // Magnetometer, Accelerometer, Gyroskop, GPS
-};
 
 
 namespace calibration {
@@ -41,13 +35,13 @@ enum Sensortype {
 
 class ExtendedKalmanFilterBase {
 public:
-	ExtendedKalmanFilterBase() :init(false) {};
-	ExtendedKalmanFilterBase(FusionConfig fg) :init(false), fusionConfig(fg) {
-		if (fusionConfig == FusionConfig::MAG) {
-			initMeasurementCounter = Eigen::Vector2i{ 0,0 };
+	ExtendedKalmanFilterBase() {};
+	ExtendedKalmanFilterBase(FusionInit fg) :init(false), fusionInit(fg) {
+		if (fusionInit == FusionInit::MAG) {
+			initMeasurementCounter = Eigen::Vector2i{ 0,0 }; // init with MAG & ACC
 		}
-		if (fusionConfig == FusionConfig::MAGGPS) {
-			initMeasurementCounter = Eigen::Vector3i{ 0,0,0 };
+		if (fusionInit == FusionInit::MAGGPS) {
+			initMeasurementCounter = Eigen::Vector3i{ 0,0,0 }; // init with MAG, ACC & GPS
 		}
 	};
 	bool isInitialised() const { return init; }
@@ -56,13 +50,22 @@ public:
 	}
 	Eigen::MatrixXd getCovariance() const { return covariance; }
 	Eigen::Vector3d getReferenceECEFPosition() const { return referenceECEFPosition; }
+	void setFusionInit(FusionInit f_init) {
+		fusionInit = f_init;
+		if (fusionInit == FusionInit::MAG) {
+			initMeasurementCounter = Eigen::Vector2i{ 0,0 }; // init with MAG & ACC
+		}
+		if (fusionInit == FusionInit::MAGGPS) {
+			initMeasurementCounter = Eigen::Vector3i{ 0,0,0 }; // init with MAG, ACC & GPS
+		}
+	}
 	void setState(const Eigen::VectorXd& new_state) { state = new_state; }
 	void initFinished() { init = true; }
 	void setCovariance(const Eigen::MatrixXd& new_covariance) { covariance = new_covariance; }
 	void setReferenceGeodeticPosition(Eigen::Vector3d& referenceGeodeticPosition) {
 		setReferenceECEFPosition(referenceGeodeticPosition);
 	}
-	FusionConfig getFusionConfig() { return fusionConfig; }
+	FusionInit getFusionConfig() { return fusionInit; }
 	Eigen::VectorXi getInitMeasurementCounter() { return initMeasurementCounter; }
 	void updateMeasurementCount(uint8_t coloumn) {
 	initMeasurementCounter[coloumn] += 1; 
@@ -100,7 +103,7 @@ public:
 
 private:
 	bool init;
-	FusionConfig fusionConfig;
+	FusionInit fusionInit;
 
 	uint8_t minInitMeasurements = 10;
 	Eigen::VectorXi initMeasurementCounter;	// Counter for initial Measurements for INIT Orientation, Position
@@ -166,14 +169,14 @@ private:
 
 class VIMUExtendedKalmanFilter : public ExtendedKalmanFilterBase {
 public:
-	VIMUExtendedKalmanFilter() :ExtendedKalmanFilterBase() {};
-	VIMUExtendedKalmanFilter(FusionConfig fg) :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase(fg) {
+	VIMUExtendedKalmanFilter() : ExtendedKalmanFilterBase() {};
+
+	// Konstruktor ohne Init, ueberpruefung ausstehend
+	VIMUExtendedKalmanFilter(FusionInit fg) :numIMUs(0), VIMU_Orientations(std::vector<Eigen::Quaternion<double>>()), VIMU_Coords(std::vector<Eigen::Vector3d>()), ExtendedKalmanFilterBase(fg) {
 		setState(Eigen::VectorXd::Zero(19));
 		setMeasurementCount(Eigen::Vector3i{ getMinInitMeasurementCount(), getMinInitMeasurementCount(), getMinInitMeasurementCount() });
-	} // Default Constructor used in Federated Fusion
-	VIMUExtendedKalmanFilter(FusionConfig fg,int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase(fg) {
-		//	assert(numIMU == VIMU_Orientations.size() == VIMU_Coords.size());
-	};
+	} VIMUExtendedKalmanFilter(FusionInit fg,int numIMU, std::vector<Eigen::Quaternion<double>> IMU_Orientation, std::vector<Eigen::Vector3d> IMU_Coords) :numIMUs(numIMU), VIMU_Orientations(IMU_Orientation), VIMU_Coords(IMU_Coords), ExtendedKalmanFilterBase(fg) {
+			};
 
 	// VIMU has to calculate the average of the measurements
 	void predictionStep(std::vector<Eigen::Vector3d> gyroMeas, double dt);
@@ -208,6 +211,6 @@ public:
 
 private:
 	int numIMUs;
-	std::vector<Eigen::Quaternion<double>> VIMU_Orientations;
-	std::vector<Eigen::Vector3d> VIMU_Coords;
+	std::vector<Eigen::Quaternion<double>> VIMU_Orientations; // not neccessary
+	std::vector<Eigen::Vector3d> VIMU_Coords; // not necessary
 };
