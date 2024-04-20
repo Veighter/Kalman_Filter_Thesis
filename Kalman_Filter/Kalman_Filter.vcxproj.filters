@@ -67,5 +67,17 @@
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_3\GPS_3_data.txt">
       <Filter>Source Files\Meas_Data</Filter>
     </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_0_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_1_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_6_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_7_data.txt">
+      <Filter>Source Files\Meas_Data</Filter>
+    </Text>
   </ItemGroup>
 </Project>

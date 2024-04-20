@@ -210,11 +210,11 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
-			if (state(0) > 1000 || state(1) > 1000) {
+			//if (state(0) > 1000 || state(1) > 1000) {
 
 				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
 				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
-			}
+			//}
 		}
 		meas.clear();
 		row_imu++;
@@ -598,10 +598,10 @@ int read_imu_data(std::string data_IMU_path, char delimiter) {
 		Eigen::Vector3d accelMeas{};
 		Eigen::Vector3d magMeas{};
 		Eigen::Vector3d gyroMeas{};
-		IMU_DATA_ROWS = 0;
+		IMU_DATA_ROWS = 0; // counts every time
 
 
-		for (std::string values; std::getline(data_IMU, values, delimiter);)
+		for (std::string values; std::getline(data_IMU, values);)
 		{
 
 			std::istringstream iss(values);
@@ -617,6 +617,8 @@ int read_imu_data(std::string data_IMU_path, char delimiter) {
 			iss >> gyroMeas[0] >> gyroMeas[1] >> gyroMeas[2];
 
 			iss >> magMeas[0] >> magMeas[1] >> magMeas[2];
+
+
 
 			imuData.accelMeas = accelMeas;
 			imuData.gyroMeas = gyroMeas;
@@ -724,10 +726,10 @@ int main()
 
 	// Orientation of the IMUs in Test Data Aquisition from 18.4.2024
 	Orientation orientation_froemern{};
-	orientation_bochum.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
-	orientation_bochum.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
-	orientation_bochum.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
-	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
+	orientation_froemern.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
+	orientation_froemern.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
+	orientation_froemern.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
+	orientation_froemern.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
 
 	/*
 	* Format of the Input Data
@@ -744,18 +746,19 @@ int main()
 
 	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", '\t', FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS);
 
-	fuse(bochum_raw_gps);
+//	fuse(bochum_raw_gps);
 	//fuse(bochum_federated_gps);
 
 
 	/*
 	* Create Configs for Froemern Drive 18.4
 	*/
-	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt 18.4.2024/Konstrukt Daten", ',', FusionInit::MAG);
+	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", ',', FusionInit::MAG);
 
-	Configuration froemern_federtaed = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt 18.4.2024/Konstrukt Daten", ',', FusionInit::MAG);
+	Configuration froemern_federtaed = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/DatalogsVeit/FroemernFahrt/18_4_2024/KonstruktDaten", ',', FusionInit::MAG);
 
-	//	fuse(froemern_raw);
+
+	fuse(froemern_raw);
 
 	return 0;
 

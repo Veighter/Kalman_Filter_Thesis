@@ -140,6 +140,10 @@
     <ClInclude Include="vimuextendedkalmanfilter.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_0_data.txt" />
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_1_data.txt" />
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_6_data.txt" />
+    <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_7_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_1\GPS_1_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_2\GPS_2_data.txt" />
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\old_data_from_sd\GPS_3\GPS_3_data.txt" />
