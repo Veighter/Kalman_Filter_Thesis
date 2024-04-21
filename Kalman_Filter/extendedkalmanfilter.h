@@ -91,6 +91,10 @@ public:
 		return rotationMatrix * (coordTransformer.geo_to_ecef(geodeticPosition) - referenceECEFPosition);
 	}
 
+	Eigen::Vector3d computeNED2ECEFwithRef(Eigen::Vector3d nedPosition) {
+		return rotationMatrix.inverse() * nedPosition;
+	}
+
 	void setRotationMatrixECEF2NED(Eigen::Vector3d& geodeticPosition) {
 		rotationMatrix = coordTransformer.ecef_to_ned_RotationMatrix(geodeticPosition);
 	}

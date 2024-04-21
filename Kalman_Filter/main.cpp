@@ -207,13 +207,16 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 
 			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
 			state_writer.open(path_position, std::ios_base::app);
-			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			Eigen::Vector3d ecefPoint = centralized_ins.vekf.computeNED2ECEFwithRef(Eigen::Vector3d{ state(0), state(1), state(2) });
+			state_writer << ecefPoint<<"\n";
+			//state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
-			//if (state(0) > 1000 || state(1) > 1000) {
+			//if (state(0) > 1000 || state(1) > 1000||state(2)>1000) {
 
-				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
-				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			//	if(row_imu<530){
+			//			std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+			//	std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
 			//}
 		}
 		meas.clear();
@@ -398,7 +401,103 @@ INS_state naiveFusion(const std::vector<INS_state>& localTracks) {
 * Estimation Fusion
 */
 
-void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {};
+void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {
+
+	double sampleTime = 1000000; // 1 s
+	std::ofstream state_writer{};
+	Eigen::VectorXd state;
+	std::string path_time, path_position;
+
+
+
+	double dt_imu{};
+
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+	centralized_ins.vekf = VIMUExtendedKalmanFilter();
+
+	// With what sensors does our fusion start??
+	for (INS* ins : centralized_ins.inss) {
+		ins->ekf.setFusionInit(fusion_init);
+	}
+
+	// jeder einzelne Sensor schaetzt seinen Zustand in sich selbst (nach transformieren in den Rahmen der VIMU)
+	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
+	// zustand aller imus wird zu dem der VIMU\
+
+	int row_imu = 1, row_before = 0;
+	bool init = false;
+
+	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
+
+	while (row_imu < IMU_DATA_ROWS) {
+
+		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+
+		// Update the IMU extended Kalman filter with the values rotated in the virtual IMU frame in the Center of Mass
+		for (INS* ins : centralized_ins.inss) {
+
+			//dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
+			ins->ekf.predictionStep(ins->imuData[row_imu].gyroMeas, dt_imu);
+
+			ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt_imu);
+
+			// MAG only used for initialisation process
+			if (!ins->ekf.isInitialised()) {
+				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt_imu);
+			}
+		}
+
+		row_before = row_imu - 1;
+
+		// durchlaufen der init abfrage der ins
+		if (!init) {
+			init = true;
+			for (INS* ins : centralized_ins.inss) {
+				init = init && ins->ekf.isInitialised();
+			}
+		}
+
+
+		if (init) {
+
+			std::vector<INS_state> ins_states = std::vector<INS_state>();
+			INS_state ins_state;
+			for (INS* ins : centralized_ins.inss) {
+				ins_state.state = ins->ekf.getState();
+				ins_state.covariance = ins->ekf.getCovariance();
+				ins_states.push_back(ins_state);
+			}
+			fusion_center = naiveFusion(ins_states);
+
+			/*	state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_federated.txt", std::ios_base::app);
+				state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+				state_writer.close();
+				*/
+
+
+			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_estimation_fusion_" + file_appendix + ".txt";
+
+			state_writer.open(path_time, std::ios_base::app);
+			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+			state_writer.close();
+
+			state = fusion_center.state;
+
+			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_estimation_fusion_" + file_appendix + ".txt";
+			state_writer.open(path_position, std::ios_base::app);
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer.close();
+			//if (state(0) > 1000 || state(1) > 1000) {
+
+			//	std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+			//	std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			//}
+
+		}
+		row_imu++;
+	}
+
+};
 
 void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appendix) {
 
@@ -501,9 +600,6 @@ void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appen
 		row_before++;
 	}
 
-
-
-
 }
 
 /// <summary>
@@ -571,7 +667,10 @@ void init_local_INS(Orientation& orientation) {
 	ins_4.ekf.setGyroTransformMatrix((Eigen::Matrix3d() << 0.93908668, -0.0466796, -0.20330397, -0.13423415, 0.67620875, -0.33500868, 0.08244915, -0.28759273, 0.49361518).finished());
 
 	// set Orientation
-
+	orientation.o_imu_0.normalize();
+	orientation.o_imu_1.normalize();
+	orientation.o_imu_6.normalize();
+	orientation.o_imu_7.normalize();
 
 	ins_1.ekf.setOrientation(orientation.o_imu_0);
 	ins_2.ekf.setOrientation(orientation.o_imu_1);
@@ -579,7 +678,7 @@ void init_local_INS(Orientation& orientation) {
 	ins_4.ekf.setOrientation(orientation.o_imu_7);
 }
 
-int read_imu_data(std::string data_IMU_path, char delimiter) {
+int read_imu_data(std::string data_IMU_path) {
 	// Einlesen der Messdaten in die IMUs 
 	for (INS* ins : cm_INS.inss)
 	{
@@ -634,7 +733,7 @@ int read_imu_data(std::string data_IMU_path, char delimiter) {
 
 }
 
-int read_gps_data(std::string data_GPS_path, char delimiter) {
+int read_gps_data(std::string data_GPS_path) {
 	// Dataformat: Time [us], Latitude [deg], Longitude Degree[deg]
 
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
@@ -653,7 +752,7 @@ int read_gps_data(std::string data_GPS_path, char delimiter) {
 		Eigen::Vector3d GPSData;
 		GPS_DATA_ROWS = 0;
 
-		for (std::string values; std::getline(data_GPS, values, delimiter);)
+		for (std::string values; std::getline(data_GPS, values);)
 		{
 			std::istringstream iss(values);
 
@@ -686,10 +785,10 @@ void fuse(Configuration& configuration) {
 	cm_INS.inss[2] = &ins_3;
 	cm_INS.inss[3] = &ins_4;
 
-	read_imu_data(configuration.getIMU_Data_Path(), configuration.getDelimiter());
+	read_imu_data(configuration.getIMU_Data_Path());
 
 	if (fusion_method == FusionMethod::Raw_GPS || fusion_method == FusionMethod::Federated_GPS) {
-		read_gps_data(configuration.getGPS_Data_Path(), configuration.getDelimiter());
+		read_gps_data(configuration.getGPS_Data_Path());
 	}
 
 	for (INS* ins : cm_INS.inss) {
@@ -742,9 +841,9 @@ int main()
 	* Create Configs for the different test data
 	*/
 	// Testdata Bochum
-	Configuration bochum_raw_gps = Configuration("bochum_raw_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", '\t', FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Raw_GPS);
+	Configuration bochum_raw_gps = Configuration("bochum_raw_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Raw_GPS, FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd");
 
-	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", '\t', FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS);
+	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS,  FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd");
 
 //	fuse(bochum_raw_gps);
 	//fuse(bochum_federated_gps);
@@ -753,14 +852,29 @@ int main()
 	/*
 	* Create Configs for Froemern Drive 18.4
 	*/
-	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", ',', FusionInit::MAG);
+	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", FusionInit::MAG);
 
-	Configuration froemern_federtaed = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/DatalogsVeit/FroemernFahrt/18_4_2024/KonstruktDaten", ',', FusionInit::MAG);
+	Configuration froemern_federated = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten",FusionMethod::Federated, FusionInit::MAG);
 
 
-	fuse(froemern_raw);
+//	fuse(froemern_raw);
+//	fuse(froemern_federated);
+
+
+		/*
+	* Create Configs for Billmerich Rundgang 20.4	*/
+	Configuration billmerich_raw = Configuration("billmerich_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionInit::MAG);
+
+	Configuration billmerich_federated = Configuration("billmerich_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionMethod::Federated, FusionInit::MAG);
+
+	fuse(billmerich_raw);
+//	fuse(billmerich_federated);
+
 
 	return 0;
+
+
+	/// asusgabe beschissen, states einzeln rausholen
 
 
 }
