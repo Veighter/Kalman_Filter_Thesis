@@ -208,7 +208,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
 			state_writer.open(path_position, std::ios_base::app);
 			Eigen::Vector3d ecefPoint = centralized_ins.vekf.computeNED2ECEFwithRef(Eigen::Vector3d{ state(0), state(1), state(2) });
-			state_writer << ecefPoint<<"\n";
+			state_writer << ecefPoint(0)<<", "<<ecefPoint(1)<<", "<<ecefPoint(2) << "\n";
 			//state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
