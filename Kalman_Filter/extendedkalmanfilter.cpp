@@ -215,7 +215,8 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		p_dot_dot_hat(0) = 2 * q_1 * q_3 - 2 * q_0 * q_2;
 		p_dot_dot_hat(1) = 2 * q_2 * q_3 + 2 * q_0 * q_1;
 		p_dot_dot_hat(2) = q_0 * q_0 - q_1 * q_1 - q_2 * q_2 + q_3 * q_3;
-
+		
+		// Hier minus??
 		p_dot_dot_hat = g * p_dot_dot_hat;
 		y = gMeas - p_dot_dot_hat;
 
@@ -310,9 +311,9 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		R(1, 1) = 1;
 		R(2, 2) = 1;
 
-		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_3, 2 * q_2, 2 * q_1, 2 * q_2;
-		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, -2 * q_1, -2 * q_2, -2 * q_3;
-		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_1, -2 * q_0, 2 * q_3, 2 * q_2;
+		H.row(0) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_0, 2 * q_1, -2 * q_2, -2 * q_3;
+		H.row(1) << 0, 0, 0, 0, 0, 0, 0, 0, 0, -2 * q_3, 2 * q_2, 2 * q_1, -2 * q_0;
+		H.row(2) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 * q_2, 2 * q_3, 2 * q_0, 2 * q_1;
 
 		Eigen::MatrixXd S = H * covariance * H.transpose() + R;
 		Eigen::MatrixXd K = covariance * H.transpose() * S.inverse();
@@ -694,7 +695,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 			// 1. transform
 			for (int i = 0; i < magMeas.size(); i++) {
 				Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
-				if (isValidMeasurement(gyroscope, transformed_magMeas)) {
+				if (isValidMeasurement(magnetometer, transformed_magMeas)) {
 					magMeasAvg += transformed_magMeas;
 					num_IMUs_avg++;
 				}
@@ -1002,6 +1003,8 @@ void VIMUExtendedKalmanFilter::setInitialStateAndCovariance() {
 	state(4) = 0;
 	state(5) = 0;
 
+	std::cout << state << std::endl;
+
 	Eigen::Quaternion<double> initOrientation = computeInitOrientation(state);
 
 	state(9) = initOrientation.w();
@@ -1051,7 +1054,7 @@ void VIMUExtendedKalmanFilter::setInitialStateAndCovariance() {
 	covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
 	covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, 0, 0, 0, 0, 0, 0;
 
-
+	std::cout << state << std::endl;
 
 	setState(state);
 	setCovariance(covariance);
@@ -1123,9 +1126,14 @@ bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vect
 	switch (sensor)
 	{
 	case gyroscope:
-		return true;
+		if (meas.norm() >= 0.52) {//  30 Graddrehung in einer Achse
+			return false;
+		}
+		else {
+			return true;
+		}
 	case accelerometer:
-		if (meas.norm() >= 30) {
+		if (meas.norm() >= 20) {
 			return false;
 		}
 		else {

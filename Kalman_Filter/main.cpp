@@ -136,7 +136,210 @@ IMU_Data imu_2_vimu(INS& ins, int row) {
 	return transformed_Data;
 }
 
+Eigen::Vector4d computeDerivationQuaternion(const Eigen::Vector4d& q, const Eigen::Vector3d gyroMeas) {
+	double q_0_dot = 1.0 / 2 * (-gyroMeas.x() * q(1) - gyroMeas.y() * q(2) - gyroMeas.z() * q(3));
+	double q_1_dot = 1.0 / 2 * (gyroMeas.x() * q(0) + gyroMeas.z() * q(2) - gyroMeas.y() * q(3));
+	double q_2_dot = 1.0 / 2 * (gyroMeas.y() * q(0) - gyroMeas.z() * q(1) + gyroMeas.x() * q(3));
+	double q_3_dot = 1.0 / 2 * (gyroMeas.z() * q(0) + gyroMeas.y() * q(1) - gyroMeas.x() * q(2));
+
+	return Eigen::Vector4d{q_0_dot, q_1_dot, q_2_dot, q_3_dot};
+}
+
+// Use Vector 4d and not Quaternion, for binary operations
+Eigen::Quaternion<double> rungeKutta4thOrder(const Eigen::Quaternion<double>& q_prev, const Eigen::Vector3d& gyroMeas, double dt) {
+	const double c1 = 0, c2 = 1.0 / 2, c3 = 1.0 / 2, c4 = 1;
+	const double a21 = 1.0 / 2, a31 = 0, a32 = 1.0 / 2, a41 = 0, a42 = 0, a43 = 0;
+	
+	// Transform q_k to Vector4d for operations
+	Eigen::Vector4d q_k{ q_prev.w(), q_prev.x(), q_prev.y(), q_prev.z() };
+
+	// k1
+	Eigen::Vector4d k1 = computeDerivationQuaternion(q_k, gyroMeas);
+
+	// k2
+	Eigen::Vector4d q_2 = q_k + dt * a21 * k1;
+	Eigen::Vector4d k2 = computeDerivationQuaternion(q_2, gyroMeas);
+
+	// k3
+	Eigen::Vector4d q_3 = q_k + dt * (a31 * k1 + a32 * k2);
+	Eigen::Vector4d k3 = computeDerivationQuaternion(q_3, gyroMeas);
+
+	// k4
+	Eigen::Vector4d q_4 = q_k + dt * (a41 * k1 + a42 * k2 + a43 * k3);
+	Eigen::Vector4d k4 = computeDerivationQuaternion(q_4, gyroMeas);
+
+	q_k = q_k + dt * 1.0 / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+
+	return Eigen::Quaternion<double> {q_k(0), q_k(1), q_k(2), q_k(3)};
+}
+
+
+
+
 INS_state naiveFusion(const std::vector<INS_state>& localTracks);
+
+void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init) {
+
+	std::ofstream state_writer{};
+	Eigen::VectorXd state;
+	std::string path_time, path_position, path_orientation;
+
+	double dt{};
+
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+	centralized_ins.vekf = VIMUExtendedKalmanFilter();
+
+	for (INS* ins : centralized_ins.inss) {
+		ins->ekf.setFusionInit(fusion_init);
+	}
+
+	int row_imu = 1, row_before = 0;
+
+	for (INS* ins : centralized_ins.inss) {
+		int row_imu = 1, row_before = 0;
+		bool init = false;
+
+		std::string file_appendix = std::to_string(ins->imu_port);
+
+
+		//path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_integration_IMU_" + file_appendix + ".txt";
+		//path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_integration_IMU_" + file_appendix + ".txt";
+		//path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/orientation_integration_IMU_" + file_appendix + ".txt";
+
+		//path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Viereck Wohnzimmer/time_integration_IMU_" + file_appendix + ".txt";
+		//path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Viereck Wohnzimmer/position_integration_IMU_" + file_appendix + ".txt";
+		//path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Viereck Wohnzimmer/orientation_integration_IMU_" + file_appendix + ".txt";
+
+
+		path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/time_integration_IMU_" + file_appendix + ".txt";
+		path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/position_integration_IMU_" + file_appendix + ".txt";
+		path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/orientation_integration_IMU_" + file_appendix + ".txt";
+
+
+
+		std::remove(path_time.c_str());
+		std::remove(path_position.c_str());
+		std::remove(path_orientation.c_str());
+
+
+		while (row_imu < IMU_DATA_ROWS) {
+
+			dt = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+			if (!ins->ekf.isInitialised()) {
+				ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt);
+				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt);
+			}
+			else {
+				Eigen::VectorXd state = ins->ekf.getState();
+
+				double x = state(0);
+				double y = state(1);
+				double z = state(2);
+				double q_0 = state(9);
+				double q_1 = state(10);
+				double q_2 = state(11);
+				double q_3 = state(12);
+
+				// Orientation to the local tangent plane NED
+				Eigen::Quaternion<double> orientation_vehicle = Eigen::Quaternion<double>{ q_0,q_1,q_2,q_3 };
+
+				// transformation in origin of vehicle frame
+				Eigen::Vector3d accMeas = ins->ekf.transform_Acc(ins->imuData[row_imu].accelMeas);
+				if (ins->ekf.isValidMeasurement(accelerometer, accMeas)) {
+					accMeas = orientation_vehicle._transformVector(accMeas);
+
+					x = x + accMeas(0) * dt + 1.0 / 2.0 * accMeas(0) * dt * dt;
+					y = y + accMeas(1) * dt + 1.0 / 2.0 * accMeas(1) * dt * dt;
+					accMeas(2) += g;
+					z = z + accMeas(2) * dt + 1.0 / 2.0 * accMeas(2) * dt * dt;
+
+					//// Orientation bestimmen
+					//double pitch = std::asin(accMeas(0) / g);
+
+					//// compute roll -> turn/ bank angle, has also to be nearly zero
+					//double param = accMeas(1) / accMeas(2);
+
+					//double roll = std::atan(param);//m_y,m_z -> atan does the job [-90,90] is adequat
+
+					//Eigen::Vector3d magMeas = ins->ekf.transform_Mag(ins->imuData[row_imu].magMeas);
+					//if (ins->ekf.isValidMeasurement(magnetometer, magMeas)) {
+					//	magMeas = orientation_vehicle._transformVector(magMeas);
+					//	double yaw = std::atan2(magMeas(1), magMeas(0));
+					//	
+					//	orientation_vehicle = ins->ekf.computeOrientation(yaw, pitch, roll);
+					//	orientation_vehicle.normalize();
+
+					//}
+				}
+
+				// update with the gyro data
+
+				Eigen::Vector3d gyroMeas = ins->ekf.transform_Gyro(ins->imuData[row_imu].gyroMeas);
+
+				if (ins->ekf.isValidMeasurement(gyroscope, gyroMeas)) {
+					gyroMeas = orientation_vehicle._transformVector(gyroMeas);
+
+					double psi_x_dot = gyroMeas(0);
+					double psi_y_dot = gyroMeas(1);
+					double psi_z_dot = gyroMeas(2);
+
+					/*Eigen::Quaternion<double> gyro_Quat = Eigen::Quaternion<double>{ 0, psi_x_dot, psi_y_dot, psi_z_dot };
+					Eigen::Quaternion<double> placeholder_Quat = Eigen::Quaternion<double>{ 0,0,0,0 };
+
+					placeholder_Quat = gyro_Quat * orientation_vehicle;
+					placeholder_Quat = Eigen::Quaternion<double>{dt* 1.0 / 2 * placeholder_Quat.w(),dt* 1.0 / 2 * placeholder_Quat.x(),dt*1.0 / 2 * placeholder_Quat.y(),dt* 1.0 / 2 * placeholder_Quat.z() };
+
+					orientation_vehicle = Eigen::Quaternion<double>{ orientation_vehicle.w() + placeholder_Quat.w(),orientation_vehicle.x() + placeholder_Quat.x(),orientation_vehicle.y() + placeholder_Quat.y(),orientation_vehicle.z() + placeholder_Quat.z() };*/
+
+					///
+					/// Runge Kutta Integration Algorithm -> Rk4n (Robust Methode IMU Calibration Page ??)
+					///
+
+					orientation_vehicle = rungeKutta4thOrder(orientation_vehicle, gyroMeas, dt);
+
+					/// 3.: Mit Euler Winkeln ZYX-Sequenz
+				//	Eigen::Vector3d euler = orientation_vehicle.toRotationMatrix().eulerAngles(2,1,0);
+					
+
+					orientation_vehicle.normalize();
+
+				
+				}
+
+
+				// update with mag for orientation spaeter
+
+				// Save output to file
+				state_writer.open(path_time, std::ios_base::app);
+				state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+				state_writer.close();
+
+				state_writer.open(path_position, std::ios_base::app);
+				state_writer << x << ", " << y << ", " << z << "\n";
+				state_writer.close();
+
+				state_writer.open(path_orientation, std::ios_base::app);
+				state_writer << orientation_vehicle.w() << "," << orientation_vehicle.x() << "," << orientation_vehicle.y() << "," << orientation_vehicle.z() << "\n";
+				state_writer.close();
+
+
+				// save the double integrated data in the state
+				state(0) = x;
+				state(1) = y;
+				state(2) = z;
+				state(9) = orientation_vehicle.w();
+				state(10) = orientation_vehicle.x();
+				state(11) = orientation_vehicle.y();
+				state(12) = orientation_vehicle.z();
+				ins->ekf.setState(state);
+			}
+
+			row_imu++;
+		}
+	}
+}
+
+
 
 /*
 * Raw Fusion
@@ -146,7 +349,7 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 
 	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
 	std::ofstream state_writer{};
-	std::string path_time, path_position;
+	std::string path_time, path_position, path_orientation;
 	Eigen::VectorXd state;
 
 	std::vector<Eigen::Quaternion<double>> VIMU_Orientations = std::vector<Eigen::Quaternion<double>>();
@@ -204,13 +407,23 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 			state_writer.close();
 
 			state = centralized_ins.vekf.getState();
+			//	std::cout << state << std::endl;
 
 			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
 			state_writer.open(path_position, std::ios_base::app);
 			Eigen::Vector3d ecefPoint = centralized_ins.vekf.computeNED2ECEFwithRef(Eigen::Vector3d{ state(0), state(1), state(2) });
-			state_writer << ecefPoint(0)<<", "<<ecefPoint(1)<<", "<<ecefPoint(2) << "\n";
-			//state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer << ecefPoint(0) << ", " << ecefPoint(1) << ", " << ecefPoint(2) << "\n";
+			//	state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
+
+			path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/orientation_vimu_" + file_appendix + ".txt";
+			state_writer.open(path_orientation, std::ios_base::app);
+		
+			state_writer << state(9) << ", " << state(10) << ", " << state(11)<<","<<state(12) << "\n";
+			state_writer.close();
+
+
+
 
 			//if (state(0) > 1000 || state(1) > 1000||state(2)>1000) {
 
@@ -407,8 +620,6 @@ void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_ap
 	std::ofstream state_writer{};
 	Eigen::VectorXd state;
 	std::string path_time, path_position;
-
-
 
 	double dt_imu{};
 
@@ -613,14 +824,14 @@ void get_calibrated_meas(INS& ins) {
 	calibration::Calibration_Params mag_params = calibration_Params.magCali;
 
 	for (IMU_Data& data : ins.imuData) {
-		data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2
-		/*	data.accelMeas *=  9.81 / 1e3;*/
-		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
+		//data.accelMeas = (accel_Params.theta * data.accelMeas - accel_Params.bias) * 9.81 / 1e3; // m/s2
+		//data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
 		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
+
+		data.accelMeas = (data.accelMeas)* 9.81 / 1e3;
+		data.gyroMeas = (gyro_params.theta* data.gyroMeas-gyro_params.bias) * M_PI / 180.0;
 	}
-
 }
-
 
 void init_local_INS(Orientation& orientation) {
 	// Define INS1
@@ -747,7 +958,7 @@ int read_gps_data(std::string data_GPS_path) {
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
 			return 1; // Rückgabe eines Fehlercodes
 		}
-		
+
 		double time;
 		Eigen::Vector3d GPSData;
 		GPS_DATA_ROWS = 0;
@@ -795,6 +1006,9 @@ void fuse(Configuration& configuration) {
 		get_calibrated_meas(*ins);
 	}
 
+	//validateIMUData(cm_INS, configuration.getFusion_Init());
+	//return;
+
 	switch (fusion_method) {
 	case FusionMethod::Raw:
 		multiple_imu_fusion_raw(cm_INS, configuration.getName());
@@ -824,11 +1038,11 @@ int main()
 	orientation_bochum.o_imu_7 = Eigen::Quaternion<double>{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
 
 	// Orientation of the IMUs in Test Data Aquisition from 18.4.2024
-	Orientation orientation_froemern{};
-	orientation_froemern.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
-	orientation_froemern.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
-	orientation_froemern.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
-	orientation_froemern.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
+	Orientation orientation_default{};
+	orientation_default.o_imu_0 = Eigen::Quaternion<double>{ 0.23, 0.769, 0.444, 0.398 };
+	orientation_default.o_imu_1 = Eigen::Quaternion<double>{ -0.858,0.444,-0.119,-0.23 };
+	orientation_default.o_imu_6 = Eigen::Quaternion<double>{ -0.23, 0.769, 0.444, -0.398 };
+	orientation_default.o_imu_7 = Eigen::Quaternion<double>{ -0.23, -0.119, -0.444, 0.858 };
 
 	/*
 	* Format of the Input Data
@@ -843,32 +1057,49 @@ int main()
 	// Testdata Bochum
 	Configuration bochum_raw_gps = Configuration("bochum_raw_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Raw_GPS, FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd");
 
-	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS,  FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd");
+	Configuration bochum_federated_gps = Configuration("bochum_federated_gps", orientation_bochum, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd", FusionMethod::Federated_GPS, FusionInit::MAGGPS, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/old_data_from_sd");
 
-//	fuse(bochum_raw_gps);
-	//fuse(bochum_federated_gps);
-
-
-	/*
-	* Create Configs for Froemern Drive 18.4
-	*/
-	Configuration froemern_raw = Configuration("froemern_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", FusionInit::MAG);
-
-	Configuration froemern_federated = Configuration("fromern_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten",FusionMethod::Federated, FusionInit::MAG);
-
-
-//	fuse(froemern_raw);
-//	fuse(froemern_federated);
+	//	fuse(bochum_raw_gps);
+		//fuse(bochum_federated_gps);
 
 
 		/*
-	* Create Configs for Billmerich Rundgang 20.4	*/
-	Configuration billmerich_raw = Configuration("billmerich_raw", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionInit::MAG);
+		* Create Configs for Froemern Drive 18.4
+		*/
+	Configuration froemern_raw = Configuration("froemern_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", FusionInit::MAG);
 
-	Configuration billmerich_federated = Configuration("billmerich_federated", orientation_froemern, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionMethod::Federated, FusionInit::MAG);
+	Configuration froemern_federated = Configuration("fromern_federated", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Froemern Fahrt/18_4_2024/Konstrukt Daten", FusionMethod::Federated, FusionInit::MAG);
 
-	fuse(billmerich_raw);
-//	fuse(billmerich_federated);
+
+	//	fuse(froemern_raw);
+	//	fuse(froemern_federated);
+
+
+			/*
+		* Create Configs for Billmerich Rundgang 20.4	*/
+	Configuration billmerich_raw = Configuration("billmerich_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionInit::MAG);
+
+	Configuration billmerich_federated = Configuration("billmerich_federated", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Spaziergang Billmericher Dorfstrasse/Konstrukt Daten", FusionMethod::Federated, FusionInit::MAG);
+
+	//fuse(billmerich_raw);
+	//	fuse(billmerich_federated);
+
+
+	/*
+	* Config Vierecktest
+	*/
+
+	Configuration wohnzimmer_raw = Configuration("wohnzimmer_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Viereck Wohnzimmer/Konstrukt Daten", FusionInit::MAG);
+
+//	fuse(wohnzimmer_raw);
+
+	/*
+	* Config Rotation vorne
+	*/
+	Configuration rotation_raw = Configuration("rotation_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotation nach vorne/Konstrukt Daten", FusionInit::MAG);
+
+	fuse(rotation_raw);
+
 
 
 	return 0;
