@@ -16,7 +16,7 @@ using namespace sensorMeas;
 int IMU_DATA_ROWS = 0;
 int GPS_DATA_ROWS = 0;
 constexpr int num_GPSs = 3;
-constexpr size_t num_IMUs = 4;
+constexpr size_t num_IMUs = 1;
 constexpr double g = 9.81;
 
 double time_constant = 1e6;
@@ -165,7 +165,7 @@ Eigen::Quaternion<double> rungeKutta4thOrder(const Eigen::Quaternion<double>& q_
 
 INS_state naiveFusion(const std::vector<INS_state>& localTracks);
 
-void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init) {
+void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init, std::string configName) {
 
 	std::ofstream state_writer{};
 	Eigen::VectorXd state;
@@ -198,9 +198,9 @@ void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init) {
 		//path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Viereck Wohnzimmer/orientation_integration_IMU_" + file_appendix + ".txt";
 
 
-		path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/time_integration_IMU_" + file_appendix + ".txt";
-		path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/position_integration_IMU_" + file_appendix + ".txt";
-		path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotation nach vorne/orientation_integration_IMU_" + file_appendix + ".txt";
+		path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotationen/time_integration_IMU_" + file_appendix + "_" + configName + ".txt";
+		path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotationen/position_integration_IMU_" + file_appendix + "_" + configName + ".txt";
+		path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/Rotationen/orientation_integration_IMU_" + file_appendix + "_" + configName + ".txt";
 
 
 
@@ -377,15 +377,17 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 		if (!centralized_ins.vekf.isInitialised()) {
 
 			// Append mag meas of each imu to vector
-			meas.clear();
-			for (INS* ins : centralized_ins.inss) {
-				meas.push_back(ins->imuData[row_imu].magMeas);
-			}
-
-			centralized_ins.vekf.updateMag(meas, dt_imu);
+		meas.clear();
+		for (INS* ins : centralized_ins.inss) {
+			meas.push_back(ins->imuData[row_imu].magMeas);
 		}
 
+		centralized_ins.vekf.updateMag(meas, dt_imu);
+			}
+
 		if (centralized_ins.vekf.isInitialised()) {
+
+
 
 			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_vimu_" + file_appendix + ".txt";
 
@@ -398,9 +400,9 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 
 			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
 			state_writer.open(path_position, std::ios_base::app);
-			Eigen::Vector3d ecefPoint = centralized_ins.vekf.computeNED2ECEFwithRef(Eigen::Vector3d{ state(0), state(1), state(2) });
-			state_writer << ecefPoint(0) << ", " << ecefPoint(1) << ", " << ecefPoint(2) << "\n";
-			//	state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			//Eigen::Vector3d ecefPoint = centralized_ins.vekf.computeNED2ECEFwithRef(Eigen::Vector3d{ state(0), state(1), state(2) });
+			//state_writer << ecefPoint(0) << ", " << ecefPoint(1) << ", " << ecefPoint(2) << "\n";
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
 			state_writer.close();
 
 			path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/orientation_vimu_" + file_appendix + ".txt";
@@ -826,6 +828,10 @@ void get_calibrated_meas(INS& ins) {
 void init_local_INS(Orientation& orientation) {
 	// Define INS1
 	ins_1.imu_port = 0;
+	ins_1.imuData = std::vector<IMU_Data>();
+	ins_1.timeDataIMU = std::vector<double>();
+	ins_1.GPSData = std::vector<Eigen::Vector3d>();
+	ins_1.timeDataGPS = std::vector<double>();
 	ins_1.ekf.setCoords(Eigen::Vector3d{ 76.7441, -1.6672, -53.0125 });
 	ins_1.ekf.setAccelBias(Eigen::Vector3d{ -4.31342161, -22.0591438, 29.0506018 });
 	ins_1.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.997624911, 0.00501776681, 0.0211610225, -0.00811466326, 0.986648117, 0.136514105, -0.0214393877, -0.138505947, 0.985038735).finished());
@@ -837,6 +843,11 @@ void init_local_INS(Orientation& orientation) {
 
 	// Define INS2
 	ins_2.imu_port = 1;
+	ins_2.imuData = std::vector<IMU_Data>();
+	ins_2.timeDataIMU = std::vector<double>();
+	ins_2.GPSData = std::vector<Eigen::Vector3d>();
+	ins_2.timeDataGPS = std::vector<double>();
+
 	ins_2.ekf.setCoords(Eigen::Vector3d{ 1.6521 ,  75.3151 ,  54.5905 });
 	ins_2.ekf.setAccelBias(Eigen::Vector3d{ -3.1927911, -19.8014002, 5.25052353 });
 	ins_2.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.998175208, -0.0131904022, 0.00489315879, 0.0138542229, 0.998597102, 0.0123811444, -0.00724020321, -0.0177614771, 0.993377592).finished());
@@ -848,6 +859,11 @@ void init_local_INS(Orientation& orientation) {
 
 	// Define INS3
 	ins_3.imu_port = 6;
+	ins_3.imuData = std::vector<IMU_Data>();
+	ins_3.timeDataIMU = std::vector<double>();
+	ins_3.GPSData = std::vector<Eigen::Vector3d>();
+	ins_3.timeDataGPS = std::vector<double>();
+
 	ins_3.ekf.setCoords(Eigen::Vector3d{ -76.5838, -1.6672, -53.0125 });
 	ins_3.ekf.setAccelBias(Eigen::Vector3d{ -3.00372421, -8.129569, 16.655453 });
 	ins_3.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.997494151, -0.0224596029, 0.0299220177, 0.0216129065, 0.996283148, -0.0106842197, -0.032514178, 0.00961013661, 0.993912779).finished());
@@ -859,6 +875,11 @@ void init_local_INS(Orientation& orientation) {
 
 	// Define INS4
 	ins_4.imu_port = 7;
+	ins_4.imuData = std::vector<IMU_Data>();
+	ins_4.timeDataIMU = std::vector<double>();
+	ins_4.GPSData = std::vector<Eigen::Vector3d>();
+	ins_4.timeDataGPS = std::vector<double>();
+
 	ins_4.ekf.setCoords(Eigen::Vector3d{ 1.6521 , -75.3151, 54.5905 }); // given in mm, conversion to m in ekf
 	ins_4.ekf.setAccelBias(Eigen::Vector3d{ 0.513195483, -6.38354307, 18.6818155 });
 	ins_4.ekf.setAccelTransformMatrix((Eigen::Matrix3d() << 0.996643923, 0.00345847616, -0.0105455711, -0.0028747351, 0.997351685, 0.0171765314, 0.0104712047, -0.0120770725, 0.996643184).finished());
@@ -980,10 +1001,13 @@ void fuse(Configuration& configuration) {
 
 	init_local_INS(configuration.getOrientations());
 
-	cm_INS.inss[0] = &ins_1;
-	cm_INS.inss[1] = &ins_2;
-	cm_INS.inss[2] = &ins_3;
-	cm_INS.inss[3] = &ins_4;
+//	cm_INS.inss[0] = &ins_1;
+//	cm_INS.inss[1] = &ins_2;
+	//cm_INS.inss[2] = &ins_3;
+	//cm_INS.inss[3] = &ins_4;
+
+	// Single IMU
+	cm_INS.inss[0] = &ins_4;
 
 	read_imu_data(configuration.getIMU_Data_Path());
 
@@ -995,7 +1019,7 @@ void fuse(Configuration& configuration) {
 		get_calibrated_meas(*ins);
 	}
 
-	//validateIMUData(cm_INS, configuration.getFusion_Init());
+	//validateIMUData(cm_INS, configuration.getFusion_Init(), configuration.getName());
 	//return;
 
 	switch (fusion_method) {
@@ -1083,11 +1107,23 @@ int main()
 	//	fuse(wohnzimmer_raw);
 
 		/*
-		* Config Rotation Y
+		* Configs Rotation
 		*/
-	Configuration rotation_raw = Configuration("rotation_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotation um Y/Konstrukt Daten", FusionInit::MAG);
 
-	fuse(rotation_raw);
+	Configuration rotation_raw_x = Configuration("rotation_raw_x", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotationen/Rotation um X/Konstrukt Daten", FusionInit::MAG);
+
+	fuse(rotation_raw_x);
+
+
+	Configuration rotation_raw_y = Configuration("rotation_raw_y", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotationen/Rotation um Y/Konstrukt Daten", FusionInit::MAG);
+
+	fuse(rotation_raw_y);
+
+
+	Configuration rotation_raw_z = Configuration("rotation_raw_z", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotationen/Rotation um Z/Konstrukt Daten", FusionInit::MAG);
+
+	fuse(rotation_raw_z);
+
 
 
 

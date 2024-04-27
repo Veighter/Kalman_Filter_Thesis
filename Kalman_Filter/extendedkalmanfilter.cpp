@@ -530,6 +530,8 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		Eigen::VectorXd state = getState();
 		Eigen::MatrixXd covariance = getCovariance();
 
+//		std::cout << "state before: " << state << std::endl;
+
 		// Acc AVG over measurements
 		// Counts the number of imu influenced in the current measurement, ignores outliers
 		int num_IMUs_avg = 0;
@@ -615,7 +617,7 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-		//	std::cout << "ACC\n";
+	//	std::cout << "state after: " << state << std::endl;
 
 	}
 
@@ -691,7 +693,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 		// 1. transform
 		for (int i = 0; i < magMeas.size(); i++) {
 			Eigen::Vector3d transformed_magMeas = transform_Mag(magMeas[i], VIMU_Orientations[i]);
-			if (isValidMeasurement(gyroscope, transformed_magMeas)) {
+			if (isValidMeasurement(magnetometer, transformed_magMeas)) {
 				magMeasAvg += transformed_magMeas;
 				num_IMUs_avg++;
 			}
@@ -854,8 +856,6 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 		setCovariance(covariance);
 		//	std::cout << "GPS\n";
 	}
-
-
 };
 
 
@@ -949,7 +949,7 @@ void VIMUExtendedKalmanFilter::setInitialStateAndCovariance() {
 	state(4) = 0;
 	state(5) = 0;
 
-	std::cout << state << std::endl;
+//	std::cout << state << std::endl;
 
 	Eigen::Quaternion<double> initOrientation = computeInitOrientation(state);
 
@@ -1000,7 +1000,7 @@ void VIMUExtendedKalmanFilter::setInitialStateAndCovariance() {
 	covariance.row(11) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, INIT_ORIENTATION_COVAR, 0, 0, 0, 0, 0, 0;
 	covariance.row(12) << 0, 0, 0, 0, 0, 0, 0, 0, 0, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_COVAR, INIT_ORIENTATION_VAR, 0, 0, 0, 0, 0, 0;
 
-	std::cout << state << std::endl;
+	std::cout <<"State Initial:\n"<< state << std::endl;
 
 	setState(state);
 	setCovariance(covariance);
@@ -1064,7 +1064,7 @@ bool ExtendedKalmanFilterBase::isValidMeasurement(Sensortype sensor, Eigen::Vect
 	switch (sensor)
 	{
 	case gyroscope:
-		if (meas.norm() >= 0.52) {//  30 Graddrehung in einer Achse
+		if (meas.norm() >= 3.14) {//  90 Graddrehung in einer Achse
 			return false;
 		}
 		else {
