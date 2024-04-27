@@ -3,6 +3,10 @@
 #include <Eigen/Core>
 #include <cmath>
 
+/// <summary>
+/// Class to transform between geodetic, ECEF and NED Coordinates
+/// first two methods from https://danceswithcode.net/engineeringnotes/geodetic_to_ecef/geodetic_to_ecef.html
+/// </summary>
 class CoordTransformer {
 private:
 	double a = 6378137.0;                    // WGS-84 semi-major axis
@@ -82,7 +86,7 @@ public:
 		return ecef;     // Return x, y, z in ECEF
 	}
 
-	// Wikipedia??
+	// Transformation out of Jekeli
 	Eigen::Matrix3d ecef_to_ned_RotationMatrix(Eigen::Vector3d& geo) {
 		double phi = geo[0] * M_PI / 180.0; // Latitude in radians
 		double lambda = geo[1] * M_PI / 180.0; // Longitude in radians

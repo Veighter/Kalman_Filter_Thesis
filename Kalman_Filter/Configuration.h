@@ -12,7 +12,9 @@ struct Orientation {
 	Eigen::Quaternion<double> o_imu_7{};
 };
 
-
+/// <summary>
+/// Configuation of the Computing for the validation or fusion of IMU and/or GPS data
+/// </summary>
 class Configuration {
 public:
 	Configuration(std::string name, Orientation orientations_imu, std::string imu_data_path, FusionInit fusion_init) :c_name(name), c_orientations_imu(orientations_imu), c_imu_data_path(imu_data_path), c_gps_data_path(""), c_fusion_method(FusionMethod::Raw), c_fusion_init(fusion_init) {};

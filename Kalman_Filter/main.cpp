@@ -13,18 +13,12 @@
 // In welcher Einheit sind die Sekunden angegeben? Laut Abgabe in Microsekunden
 // alle 2 sekunden kommt ein GPS rein
 using namespace sensorMeas;
-int IMU_DATA_ROWS = 0;//8727; // noch nicht dynamisch angepasst fuer die Froemern Fahrt
-int GPS_DATA_ROWS = 0;//870; // muss dynamisch sein
+int IMU_DATA_ROWS = 0;
+int GPS_DATA_ROWS = 0;
 constexpr int num_GPSs = 3;
 constexpr size_t num_IMUs = 4;
 constexpr double g = 9.81;
 
-// Flag fuer die Estimation Fusion
-constexpr bool estimation_fusion = true;
-
-// reference values to detect outliers simple way
-constexpr double ref_lat = 51.0;
-constexpr double ref_long = 7.0;
 double time_constant = 1e6;
 
 
@@ -33,9 +27,6 @@ struct INS_state {
 	Eigen::MatrixXd covariance;
 }fusion_center;
 
-/// <summary>
-/// 
-/// </summary>
 struct IMU_Data {
 	Eigen::Vector3d accelMeas{};
 	Eigen::Vector3d magMeas{};
@@ -57,7 +48,7 @@ struct IMU_Data {
 /// </summary>
 struct INS
 {
-	int imu_port{}; // connect port on the multiplexer
+	int imu_port{}; // connected port on the multiplexer
 
 	// IMU specific Data
 	std::vector<double> timeDataIMU{ std::vector<double>() };
@@ -142,14 +133,13 @@ Eigen::Vector4d computeDerivationQuaternion(const Eigen::Vector4d& q, const Eige
 	double q_2_dot = 1.0 / 2 * (gyroMeas.y() * q(0) - gyroMeas.z() * q(1) + gyroMeas.x() * q(3));
 	double q_3_dot = 1.0 / 2 * (gyroMeas.z() * q(0) + gyroMeas.y() * q(1) - gyroMeas.x() * q(2));
 
-	return Eigen::Vector4d{q_0_dot, q_1_dot, q_2_dot, q_3_dot};
+	return Eigen::Vector4d{ q_0_dot, q_1_dot, q_2_dot, q_3_dot };
 }
 
-// Use Vector 4d and not Quaternion, for binary operations
 Eigen::Quaternion<double> rungeKutta4thOrder(const Eigen::Quaternion<double>& q_prev, const Eigen::Vector3d& gyroMeas, double dt) {
 	const double c1 = 0, c2 = 1.0 / 2, c3 = 1.0 / 2, c4 = 1;
 	const double a21 = 1.0 / 2, a31 = 0, a32 = 1.0 / 2, a41 = 0, a42 = 0, a43 = 0;
-	
+
 	// Transform q_k to Vector4d for operations
 	Eigen::Vector4d q_k{ q_prev.w(), q_prev.x(), q_prev.y(), q_prev.z() };
 
@@ -172,9 +162,6 @@ Eigen::Quaternion<double> rungeKutta4thOrder(const Eigen::Quaternion<double>& q_
 
 	return Eigen::Quaternion<double> {q_k(0), q_k(1), q_k(2), q_k(3)};
 }
-
-
-
 
 INS_state naiveFusion(const std::vector<INS_state>& localTracks);
 
@@ -299,11 +286,11 @@ void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init) {
 
 					/// 3.: Mit Euler Winkeln ZYX-Sequenz
 				//	Eigen::Vector3d euler = orientation_vehicle.toRotationMatrix().eulerAngles(2,1,0);
-					
+
 
 					orientation_vehicle.normalize();
 
-				
+
 				}
 
 
@@ -418,8 +405,8 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 
 			path_orientation = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/orientation_vimu_" + file_appendix + ".txt";
 			state_writer.open(path_orientation, std::ios_base::app);
-		
-			state_writer << state(9) << ", " << state(10) << ", " << state(11)<<","<<state(12) << "\n";
+
+			state_writer << state(9) << ", " << state(10) << ", " << state(11) << "," << state(12) << "\n";
 			state_writer.close();
 
 
@@ -436,6 +423,241 @@ void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix)
 		row_imu++;
 	}
 
+
+};
+
+void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appendix) {
+
+	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
+	int row_gps = 0;
+
+	std::ofstream state_writer{};
+	std::string path_time, path_position;
+
+	Eigen::VectorXd state;
+
+	std::vector<Eigen::Quaternion<double>> VIMU_Orientations = std::vector<Eigen::Quaternion<double>>();
+	std::vector<Eigen::Vector3d> VIMU_Coords = std::vector<Eigen::Vector3d>();
+
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+
+	for (INS* ins : centralized_ins.inss) {
+		VIMU_Orientations.push_back(ins->ekf.getOrientation());
+		VIMU_Coords.push_back(ins->ekf.getCoords());
+	}
+
+	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionInit::MAGGPS, num_IMUs, VIMU_Orientations, VIMU_Coords);
+
+	double dt_imu{}, dt_gps{};
+	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
+	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
+
+		// Prediction Step
+		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+		// Append gyro meas of each imu to vector
+		for (INS* ins : centralized_ins.inss) {
+			meas.push_back(ins->imuData[row_imu].gyroMeas);
+		}
+
+		centralized_ins.vekf.predictionStep(meas, dt_imu);
+
+		// Update Step
+		// Append acc meas of each imu to vector
+		meas.clear();
+		for (INS* ins : centralized_ins.inss) {
+			meas.push_back(ins->imuData[row_imu].accelMeas);
+		}
+
+		centralized_ins.vekf.updateAcc(meas, dt_imu);
+
+		// MAG only used for initialisation process
+		if (!centralized_ins.vekf.isInitialised()) {
+
+			// Append mag meas of each imu to vector
+			meas.clear();
+			for (INS* ins : centralized_ins.inss) {
+				meas.push_back(ins->imuData[row_imu].magMeas);
+			}
+
+			centralized_ins.vekf.updateMag(meas, dt_imu);
+		}
+
+		int row_before = row_imu - 1;
+		if (centralized_ins.timeDataIMU[row_before] < centralized_ins.timeDataGPS[row_gps] && centralized_ins.timeDataGPS[row_gps] < centralized_ins.timeDataIMU[row_imu]) {// was ist wenn es mehrere GPS Messungen in der Zeit der Aquirierung gibt??
+
+			// Important for velocioty (if added)
+			if (row_gps > 0) {
+				dt_gps = centralized_ins.timeDataGPS[row_gps] - centralized_ins.timeDataGPS[row_gps - (int)1];
+			}
+			else { dt_gps = 0; }
+
+			// Append gps meas to vector
+			meas.clear();
+			for (std::vector<Eigen::Vector3d> gpsMeas : centralized_ins.GPSData) {
+				meas.push_back(gpsMeas[row_gps]);
+			}
+
+			centralized_ins.vekf.updateGPS(meas, dt_gps);
+			row_gps++;
+
+		}
+
+		if (centralized_ins.vekf.isInitialised()) {
+			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_vimu_" + file_appendix + ".txt";
+
+			state_writer.open(path_time, std::ios_base::app);
+			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+			state_writer.close();
+
+			state = centralized_ins.vekf.getState();
+
+			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
+			state_writer.open(path_position, std::ios_base::app);
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer.close();
+
+			if (state(0) > 1000 || state(1) > 1000) {
+
+				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			}
+		}
+		meas.clear();
+		row_imu++;
+		row_before++;
+	}
+
+}
+
+
+// Naive Fusion like http://fusion.isif.org/proceedings/fusion01CD/fusion/searchengine/pdf/WeA22.pdf
+INS_state naiveFusion(const std::vector<INS_state>& localTracks) {
+
+	// init covariance of system 
+	Eigen::MatrixXd inverseTotalCovariance = Eigen::MatrixXd::Zero(localTracks[0].covariance.rows(), localTracks[0].covariance.cols());
+
+	// compute the covariance
+	for (const INS_state& localTrack : localTracks) {
+		inverseTotalCovariance += localTrack.covariance.inverse();
+	}
+
+	// compute inverse covariance 
+	Eigen::MatrixXd totalCovariance = inverseTotalCovariance.inverse();
+
+	// compute the combined state 
+	Eigen::VectorXd totalState = Eigen::VectorXd::Zero(localTracks[0].state.rows(), localTracks[0].state.cols());
+
+	for (const INS_state& localTrack : localTracks) {
+		totalState += localTrack.covariance.inverse() * localTrack.state;
+	}
+
+	totalState = totalCovariance * totalState;
+
+	INS_state fusion_center;
+	fusion_center.covariance = totalCovariance;
+	fusion_center.state = totalState;
+
+	return fusion_center;
+}
+
+
+/*
+* Estimation Fusion
+*/
+
+void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {
+
+	double sampleTime = 1000000; // 1 s
+	std::ofstream state_writer{};
+	Eigen::VectorXd state;
+	std::string path_time, path_position;
+
+	double dt_imu{};
+
+	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
+	centralized_ins.vekf = VIMUExtendedKalmanFilter();
+
+	// With what sensors does our fusion start??
+	for (INS* ins : centralized_ins.inss) {
+		ins->ekf.setFusionInit(fusion_init);
+	}
+
+	// jeder einzelne Sensor schaetzt seinen Zustand in sich selbst (nach transformieren in den Rahmen der VIMU)
+	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
+	// zustand aller imus wird zu dem der VIMU\
+
+	int row_imu = 1, row_before = 0;
+	bool init = false;
+
+	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
+
+	while (row_imu < IMU_DATA_ROWS) {
+
+		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
+
+		// Update the IMU extended Kalman filter with the values rotated in the virtual IMU frame in the Center of Mass
+		for (INS* ins : centralized_ins.inss) {
+
+			//dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
+			ins->ekf.predictionStep(ins->imuData[row_imu].gyroMeas, dt_imu);
+
+			ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt_imu);
+
+			// MAG only used for initialisation process
+			if (!ins->ekf.isInitialised()) {
+				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt_imu);
+			}
+		}
+
+		row_before = row_imu - 1;
+
+		// durchlaufen der init abfrage der ins
+		if (!init) {
+			init = true;
+			for (INS* ins : centralized_ins.inss) {
+				init = init && ins->ekf.isInitialised();
+			}
+		}
+
+
+		if (init) {
+
+			std::vector<INS_state> ins_states = std::vector<INS_state>();
+			INS_state ins_state;
+			for (INS* ins : centralized_ins.inss) {
+				ins_state.state = ins->ekf.getState();
+				ins_state.covariance = ins->ekf.getCovariance();
+				ins_states.push_back(ins_state);
+			}
+			fusion_center = naiveFusion(ins_states);
+
+			/*	state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_federated.txt", std::ios_base::app);
+				state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+				state_writer.close();
+				*/
+
+
+			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_estimation_fusion_" + file_appendix + ".txt";
+
+			state_writer.open(path_time, std::ios_base::app);
+			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
+			state_writer.close();
+
+			state = fusion_center.state;
+
+			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_estimation_fusion_" + file_appendix + ".txt";
+			state_writer.open(path_position, std::ios_base::app);
+			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
+			state_writer.close();
+			//if (state(0) > 1000 || state(1) > 1000) {
+
+			//	std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
+			//	std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
+			//}
+
+		}
+		row_imu++;
+	}
 
 };
 
@@ -579,239 +801,7 @@ void multiple_imu_fusion_estimation_gps(CM_INS& centralized_ins, std::string fil
 	}
 }
 
-// Funktion zur Naïve-Fusion von IMU-Zuständen und Kovarianzen http://fusion.isif.org/proceedings/fusion01CD/fusion/searchengine/pdf/WeA22.pdf
-INS_state naiveFusion(const std::vector<INS_state>& localTracks) {
 
-	// init covariance of system 
-	Eigen::MatrixXd inverseTotalCovariance = Eigen::MatrixXd::Zero(localTracks[0].covariance.rows(), localTracks[0].covariance.cols());
-
-	// compute the covariance
-	for (const INS_state& localTrack : localTracks) {
-		inverseTotalCovariance += localTrack.covariance.inverse();
-	}
-
-	// compute inverse covariance 
-	Eigen::MatrixXd totalCovariance = inverseTotalCovariance.inverse();
-
-	// compute the combined state 
-	Eigen::VectorXd totalState = Eigen::VectorXd::Zero(localTracks[0].state.rows(), localTracks[0].state.cols());
-
-	for (const INS_state& localTrack : localTracks) {
-		totalState += localTrack.covariance.inverse() * localTrack.state;
-	}
-
-	totalState = totalCovariance * totalState;
-
-	INS_state fusion_center;
-	fusion_center.covariance = totalCovariance;
-	fusion_center.state = totalState;
-
-	return fusion_center;
-}
-
-
-/*
-* Estimation Fusion
-*/
-
-void multiple_imu_fusion_estimation(CM_INS& centralized_ins, std::string file_appendix, FusionInit fusion_init) {
-
-	double sampleTime = 1000000; // 1 s
-	std::ofstream state_writer{};
-	Eigen::VectorXd state;
-	std::string path_time, path_position;
-
-	double dt_imu{};
-
-	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
-	centralized_ins.vekf = VIMUExtendedKalmanFilter();
-
-	// With what sensors does our fusion start??
-	for (INS* ins : centralized_ins.inss) {
-		ins->ekf.setFusionInit(fusion_init);
-	}
-
-	// jeder einzelne Sensor schaetzt seinen Zustand in sich selbst (nach transformieren in den Rahmen der VIMU)
-	// dann beim eintreffen der GPS wird das Mittel der Zustaende genommen
-	// zustand aller imus wird zu dem der VIMU\
-
-	int row_imu = 1, row_before = 0;
-	bool init = false;
-
-	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
-
-	while (row_imu < IMU_DATA_ROWS) {
-
-		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
-
-		// Update the IMU extended Kalman filter with the values rotated in the virtual IMU frame in the Center of Mass
-		for (INS* ins : centralized_ins.inss) {
-
-			//dt_imu = ins->timeDataIMU[row_imu] - ins->timeDataIMU[row_imu - 1];
-			ins->ekf.predictionStep(ins->imuData[row_imu].gyroMeas, dt_imu);
-
-			ins->ekf.updateAcc(ins->imuData[row_imu].accelMeas, dt_imu);
-
-			// MAG only used for initialisation process
-			if (!ins->ekf.isInitialised()) {
-				ins->ekf.updateMag(ins->imuData[row_imu].magMeas, dt_imu);
-			}
-		}
-
-		row_before = row_imu - 1;
-
-		// durchlaufen der init abfrage der ins
-		if (!init) {
-			init = true;
-			for (INS* ins : centralized_ins.inss) {
-				init = init && ins->ekf.isInitialised();
-			}
-		}
-
-
-		if (init) {
-
-			std::vector<INS_state> ins_states = std::vector<INS_state>();
-			INS_state ins_state;
-			for (INS* ins : centralized_ins.inss) {
-				ins_state.state = ins->ekf.getState();
-				ins_state.covariance = ins->ekf.getCovariance();
-				ins_states.push_back(ins_state);
-			}
-			fusion_center = naiveFusion(ins_states);
-
-			/*	state_writer.open("C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/time_federated.txt", std::ios_base::app);
-				state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
-				state_writer.close();
-				*/
-
-
-			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_estimation_fusion_" + file_appendix + ".txt";
-
-			state_writer.open(path_time, std::ios_base::app);
-			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
-			state_writer.close();
-
-			state = fusion_center.state;
-
-			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_estimation_fusion_" + file_appendix + ".txt";
-			state_writer.open(path_position, std::ios_base::app);
-			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
-			state_writer.close();
-			//if (state(0) > 1000 || state(1) > 1000) {
-
-			//	std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
-			//	std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
-			//}
-
-		}
-		row_imu++;
-	}
-
-};
-
-void multiple_imu_fusion_raw_gps(CM_INS& centralized_ins, std::string file_appendix) {
-
-	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
-	int row_gps = 0;
-
-	std::ofstream state_writer{};
-	std::string path_time, path_position;
-
-	Eigen::VectorXd state;
-
-	std::vector<Eigen::Quaternion<double>> VIMU_Orientations = std::vector<Eigen::Quaternion<double>>();
-	std::vector<Eigen::Vector3d> VIMU_Coords = std::vector<Eigen::Vector3d>();
-
-	centralized_ins.timeDataIMU = centralized_ins.inss[0]->timeDataIMU;
-
-	for (INS* ins : centralized_ins.inss) {
-		VIMU_Orientations.push_back(ins->ekf.getOrientation());
-		VIMU_Coords.push_back(ins->ekf.getCoords());
-	}
-
-	centralized_ins.vekf = VIMUExtendedKalmanFilter(FusionInit::MAGGPS, num_IMUs, VIMU_Orientations, VIMU_Coords);
-
-	double dt_imu{}, dt_gps{};
-	std::vector<Eigen::Vector3d> meas = std::vector<Eigen::Vector3d>();
-	while (row_gps < GPS_DATA_ROWS && row_imu < IMU_DATA_ROWS) {
-
-		// Prediction Step
-		dt_imu = centralized_ins.timeDataIMU[row_imu] - centralized_ins.timeDataIMU[row_imu - (int)1];
-		// Append gyro meas of each imu to vector
-		for (INS* ins : centralized_ins.inss) {
-			meas.push_back(ins->imuData[row_imu].gyroMeas);
-		}
-
-		centralized_ins.vekf.predictionStep(meas, dt_imu);
-
-		// Update Step
-		// Append acc meas of each imu to vector
-		meas.clear();
-		for (INS* ins : centralized_ins.inss) {
-			meas.push_back(ins->imuData[row_imu].accelMeas);
-		}
-
-		centralized_ins.vekf.updateAcc(meas, dt_imu);
-
-		// MAG only used for initialisation process
-		if (!centralized_ins.vekf.isInitialised()) {
-
-			// Append mag meas of each imu to vector
-			meas.clear();
-			for (INS* ins : centralized_ins.inss) {
-				meas.push_back(ins->imuData[row_imu].magMeas);
-			}
-
-			centralized_ins.vekf.updateMag(meas, dt_imu);
-		}
-
-		int row_before = row_imu - 1;
-		if (centralized_ins.timeDataIMU[row_before] < centralized_ins.timeDataGPS[row_gps] && centralized_ins.timeDataGPS[row_gps] < centralized_ins.timeDataIMU[row_imu]) {// was ist wenn es mehrere GPS Messungen in der Zeit der Aquirierung gibt??
-
-			// Important for velocioty (if added)
-			if (row_gps > 0) {
-				dt_gps = centralized_ins.timeDataGPS[row_gps] - centralized_ins.timeDataGPS[row_gps - (int)1];
-			}
-			else { dt_gps = 0; }
-
-			// Append gps meas to vector
-			meas.clear();
-			for (std::vector<Eigen::Vector3d> gpsMeas : centralized_ins.GPSData) {
-				meas.push_back(gpsMeas[row_gps]);
-			}
-
-			centralized_ins.vekf.updateGPS(meas, dt_gps);
-			row_gps++;
-
-		}
-
-		if (centralized_ins.vekf.isInitialised()) {
-			path_time = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/time_vimu_" + file_appendix + ".txt";
-
-			state_writer.open(path_time, std::ios_base::app);
-			state_writer << centralized_ins.timeDataIMU[row_imu] << "\n";
-			state_writer.close();
-
-			state = centralized_ins.vekf.getState();
-
-			path_position = "C:/dev/Thesis/Kalman_Filter_Thesis/Kalman_Filter/Datalogs/position_xyz_vimu_" + file_appendix + ".txt";
-			state_writer.open(path_position, std::ios_base::app);
-			state_writer << state(0) << "," << state(1) << "," << state(2) << "\n";
-			state_writer.close();
-
-			if (state(0) > 1000 || state(1) > 1000) {
-
-				std::cout << "Zeit: " << centralized_ins.timeDataIMU[row_imu] << std::endl;
-				std::cout << "State:\n " << centralized_ins.vekf.getState() << std::endl;// << ", Covariance: " << cm_INS.ekf.getCovariance() << std::endl;
-			}
-		}
-		meas.clear();
-		row_imu++;
-		row_before++;
-	}
-
-}
 
 /// <summary>
 /// Transforms the measurements of the INS delivered from the IMU given the sensor error Model of the IMU sensors
@@ -828,8 +818,8 @@ void get_calibrated_meas(INS& ins) {
 		//data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0; // rad/s
 		data.magMeas = mag_params.theta * (data.magMeas - mag_params.bias);
 
-		data.accelMeas = (data.accelMeas)* 9.81 / 1e3;
-		data.gyroMeas = (gyro_params.theta* data.gyroMeas-gyro_params.bias) * M_PI / 180.0;
+		data.accelMeas = (data.accelMeas) * 9.81 / 1e3;
+		data.gyroMeas = (gyro_params.theta * data.gyroMeas - gyro_params.bias) * M_PI / 180.0;
 	}
 }
 
@@ -890,7 +880,7 @@ void init_local_INS(Orientation& orientation) {
 }
 
 int read_imu_data(std::string data_IMU_path) {
-	// Einlesen der Messdaten in die IMUs 
+
 	for (INS* ins : cm_INS.inss)
 	{
 		std::stringstream filepath{};
@@ -900,7 +890,7 @@ int read_imu_data(std::string data_IMU_path) {
 		if (!data_IMU.is_open())
 		{
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
-			return 1; // Rückgabe eines Fehlercodes
+			return 1;
 		}
 
 		double time{};
@@ -908,8 +898,7 @@ int read_imu_data(std::string data_IMU_path) {
 		Eigen::Vector3d accelMeas{};
 		Eigen::Vector3d magMeas{};
 		Eigen::Vector3d gyroMeas{};
-		IMU_DATA_ROWS = 0; // counts every time
-
+		IMU_DATA_ROWS = 0;
 
 		for (std::string values; std::getline(data_IMU, values);)
 		{
@@ -945,7 +934,7 @@ int read_imu_data(std::string data_IMU_path) {
 }
 
 int read_gps_data(std::string data_GPS_path) {
-	// Dataformat: Time [us], Latitude [deg], Longitude Degree[deg]
+	// Format: Time [us], Latitude [deg], Longitude Degree[deg]
 
 	for (int gps_number = 0; gps_number < num_GPSs; gps_number++) {
 		std::stringstream filepath{};
@@ -956,7 +945,7 @@ int read_gps_data(std::string data_GPS_path) {
 		{
 			std::cout << filepath.str() << std::endl;
 			std::cerr << "Fehler beim Öffnen der Datei!" << std::endl;
-			return 1; // Rückgabe eines Fehlercodes
+			return 1;
 		}
 
 		double time;
@@ -1046,7 +1035,7 @@ int main()
 
 	/*
 	* Format of the Input Data
-	* With Tabs or Comma as Delimiter .txt file
+	* whitespace as delimiter (easier reading with inputstream)
 	*
 	* Time [ms],ACC_X [mg],ACC_Y [mg],ACC_Z [mg],GYRO_X [dps],GYRO_Y [dps],GYRO_Z [dps],MAG_X [uT],MAG_Y [uT],MAG_Z [uT]
 	*/
@@ -1091,12 +1080,12 @@ int main()
 
 	Configuration wohnzimmer_raw = Configuration("wohnzimmer_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Viereck Wohnzimmer/Konstrukt Daten", FusionInit::MAG);
 
-//	fuse(wohnzimmer_raw);
+	//	fuse(wohnzimmer_raw);
 
-	/*
-	* Config Rotation vorne
-	*/
-	Configuration rotation_raw = Configuration("rotation_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotation nach vorne/Konstrukt Daten", FusionInit::MAG);
+		/*
+		* Config Rotation Y
+		*/
+	Configuration rotation_raw = Configuration("rotation_raw", orientation_default, "C:/Users/veigh/Desktop/Bachelor-Arbeit/Code/Datalogs Veit/Rotation um Y/Konstrukt Daten", FusionInit::MAG);
 
 	fuse(rotation_raw);
 
@@ -1105,149 +1094,6 @@ int main()
 	return 0;
 
 
-	/// asusgabe beschissen, states einzeln rausholen
-
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-* Old, but maybe important code
-*/
-
-
-
-/*
-		* First GPS "naive" try in a fusion center, but the estimate is diverging
-		*/
-		// verschieben der GPS Position um Position im Konstrukt 
-						// Mitteln der Werte, um die Fusion in dem Punkt zu machen
-		// GPS Fusion in VIMU and not in the IMUs itself
-		//if (init) {
-
-		//
-
-		//	Eigen::VectorXd state_VIMU, state_IMU_augmented;
-		//	state_VIMU = centralized_ins.vekf.getState();
-		//	for (INS* ins : centralized_ins.inss) {
-		//		// Sum up the State-Vectors from all IMUs
-
-		//		state_IMU_augmented = Eigen::VectorXd::Zero(19);
-		//		state_IMU_augmented.head(13) = ins->ekf.getState();
-		//		
-		//		std::cout << "State IMU: " << ins->imu_port <<":\n" << state_IMU_augmented << std::endl;
-
-		//		centralized_ins.vekf.setState(state_VIMU + state_IMU_augmented);
-		//	}
-		//	//std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
-
-
-		//	Eigen::VectorXd avg_state = centralized_ins.vekf.getState();
-		//	avg_state /= num_IMUs;
-
-		//	centralized_ins.vekf.setState(avg_state);
-
-		//	std::cout << "State central: \n" << centralized_ins.vekf.getState() << std::endl;
-
-
-		//	centralized_ins.vekf.updateGPS(meas, dt_gps);
-
-		//	// Update the central state in the IMU state
-		//	// What states have to be updated? All or position only? Information sharing only the Position! velocity & acc & Orientation maybe too
-		//	Eigen::VectorXd state = centralized_ins.vekf.getState();
-		//	double x = state(0);
-		//	double y = state(1);
-		//	double z = state(2);
-
-		//	Eigen::Vector3d position_avg{ x, y, z };
-
-
-		//	double q_0 = state(9);
-		//	double q_1 = state(10);
-		//	double q_2 = state(11);
-		//	double q_3 = state(12);
-
-		//	Eigen::Vector4d orientation_avg{ q_0,q_1,q_2,q_3 };
-
-		//	for (INS* ins : centralized_ins.inss)
-		//	{
-		//		Eigen::VectorXd state_IMU = ins->ekf.getState();
-		//		state_IMU.segment<3>(0) = position_avg + ins->ekf.getCoords();
-		//		state_IMU.segment<4>(9) = orientation_avg;
-		//		ins->ekf.setState(state_IMU);
-		//	}
-
-
-		//}
-		//else {
-
-		//	Eigen::Vector3d gpsMeasAvg = Eigen::Vector3d::Zero();
-		//	int num_IMUs_avg = 0;
-		//	// 1. transform
-		//	for (int i = 0; i < meas.size(); i++) {
-		//		if (centralized_ins.vekf.isValidMeasurement(gps, meas[i])) {
-		//			gpsMeasAvg += meas[i];
-		//			num_IMUs_avg++;
-		//		}
-		//	}
-		//	gpsMeasAvg /= num_IMUs_avg;
-
-		//	for (INS* ins : centralized_ins.inss)
-		//	{
-		//		ins->ekf.updateGPS(gpsMeasAvg, dt_gps);
-
-		//	}
-		//}
-
-
-
-
-// Orientation from the calibration of the IMUs and samples (MCU is not neccessary in the middle of the object)
-//struct Orientation_new {
-//	Eigen::Quaternion<double> o_imu_0{ -0.398, 0.444, -0.769, 0.23 };
-//	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
-//	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
-//	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
-//} orient_new;
-
-
-//struct Orientation_new {
-//	Eigen::Quaternion<double> o_imu_0{ 0.23, 0.769, 0.444, 0.398 };
-//	Eigen::Quaternion<double> o_imu_1{ -0.858,0.444,-0.119,-0.23 };
-//	Eigen::Quaternion<double> o_imu_6{ -0.23, 0.769, 0.444, -0.398 };
-//	Eigen::Quaternion<double> o_imu_7{ -0.23, -0.119, -0.444, 0.858 };
-//} orient_new;
-//
-
-//struct Orientation_old {
-//	Eigen::Quaternion<double> o_imu_0{ -0.23 , -0.769, -0.444, -0.398 };
-//	Eigen::Quaternion<double> o_imu_1{ -0.23, 0.119, 0.444, 0.858 };
-//	Eigen::Quaternion<double> o_imu_6{ -0.39807, -0.44399, 0.76902, 0.22983 };
-//	Eigen::Quaternion<double> o_imu_7{ 0.85781 ,0.44404, -0.11898 , 0.22985 };
-//} orient_old;
-
-
 

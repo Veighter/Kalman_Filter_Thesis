@@ -24,7 +24,6 @@ constexpr double declinationAngle = 3.1833 * M_PI / 180.0;
 
 
 
-// Prediciton Step with implicit Gyro inputs, decreases number of states https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6316172
 void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 	if (isInitialised()) {
 		Eigen::VectorXd state = getState();
@@ -54,37 +53,6 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 		double psi_x_dot = gyroMeas(0);
 		double psi_y_dot = gyroMeas(1);
 		double psi_z_dot = gyroMeas(2);
-
-
-
-		//// Predict position
-		//state(0) = x + dt * x_dot + 1. / 2 * dt * dt * x_dot_dot;
-		//state(1) = y + dt * y_dot + 1. / 2 * dt * dt * y_dot_dot;
-		//state(2) = z + dt * z_dot + 1. / 2 * dt * dt * z_dot_dot;
-
-		//// Predict velocity
-		//state(3) = x_dot + dt * x_dot_dot;
-		//state(4) = y_dot + dt * y_dot_dot;
-		//state(5) = z_dot + dt * z_dot_dot;
-
-		//// Update Acceleration with measurements
-		//state(6) = x_dot_dot;
-		//state(7) = y_dot_dot;
-		//state(8) = z_dot_dot;
-
-		//// Update Angular velocity
-		//state(9) = psi_x_dot;
-		//state(10) = psi_y_dot;
-		//state(11) = psi_z_dot;
-
-		//// Predict Orientation
-		//Eigen::Quaternion<double> q = Eigen::Quaternion<double>{ q_0 + 1. / 2 * (-psi_x_dot * q_1 - psi_y_dot * q_2 - psi_z_dot * q_3) * dt, q_1 + 1. / 2 * (psi_x_dot * q_0 + psi_z_dot * q_2 - psi_y_dot * q_3) * dt, q_2 + 1. / 2 * (psi_y_dot * q_0 - psi_z_dot * q_1 + psi_x_dot * q_3) * dt, q_3 + 1. / 2 * (psi_z_dot * q_0 + psi_y_dot * q_1 - psi_x_dot * q_2) * dt
-		//};
-		//q.normalize();
-		//state(12) = q.w();
-		//state(13) = q.x();
-		//state(14) = q.y();
-		//state(15) = q.z();
 
 
 		// state = x,y,z,x_dot,y_dot,z_dot,x_dot_dot,y_dot_dot,z_dot_dot,psi_x_dot,psi_y_dot,q0,q1,q2,q3,B_x,B_y,B_z
@@ -126,14 +94,11 @@ void ExtendedKalmanFilter::predictionStep(Eigen::Vector3d gyroMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "GYRO IMU\n";
+		//	std::cout << "GYRO IMU\n";
 	}
 
 }
 
-
-// Das was geschaetzt werden soll ist eigentlich nur Position, Geschwindigkeit und Orientierung des zu navigierenden Objekts. 
-// Anpassen des Zustandsvektors ist also von Noeten!!
 void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 	if (!isInitialised()) {
@@ -179,7 +144,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		// Correction for the gravity	
 		accMeas(2) += g;
 
-		// Acc Correction, Measurement noise noch hinzufuegen [R]
+		// Acc Correction, Measurement 
 		Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 13);
 		Eigen::MatrixXd R = Eigen::MatrixXd::Zero(3, 3);
 
@@ -201,9 +166,6 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		covariance = (Eigen::MatrixXd::Identity(13, 13) - K * H) * covariance;
 
 
-		/*
-		* Rechne ich nun so weiter oder kann ich das auch zu einem nichtlinearen Modell machen?
-		*/
 
 		// Orientation Correciton
 		Eigen::Vector3d p_dot_dot_hat = Eigen::Vector3d::Zero();
@@ -215,8 +177,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 		p_dot_dot_hat(0) = 2 * q_1 * q_3 - 2 * q_0 * q_2;
 		p_dot_dot_hat(1) = 2 * q_2 * q_3 + 2 * q_0 * q_1;
 		p_dot_dot_hat(2) = q_0 * q_0 - q_1 * q_1 - q_2 * q_2 + q_3 * q_3;
-		
-		// Hier minus??
+
 		p_dot_dot_hat = g * p_dot_dot_hat;
 		y = gMeas - p_dot_dot_hat;
 
@@ -239,7 +200,7 @@ void ExtendedKalmanFilter::updateAcc(Eigen::Vector3d accMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "ACC IMU\n";
+		//	std::cout << "ACC IMU\n";
 
 	}
 
@@ -287,14 +248,10 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 		double q_3 = state(12);
 
 
-		// Magnet is in north direction, only x directed 
-
-		// Correction seems a bit of, mag_hat has to be in x-axis of the ned! But what does that mean for now?
 		mag_hat(0) = q_0 * q_0 + q_1 * q_1 - q_2 * q_2 - q_3 * q_3;
 		mag_hat(1) = 2 * q_1 * q_2 - 2 * q_0 * q_3;
 		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
 
-		// where do i put the declination angle? ("Angle between magnetic and true north")
 		// Transformation from Sensor Acc to vehicle Body Acc
 		magMeas = transform_Mag(magMeas);
 
@@ -329,15 +286,11 @@ void ExtendedKalmanFilter::updateMag(Eigen::Vector3d magMeas, double dt) {
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "MAG\n";
+		//	std::cout << "MAG\n";
 
 	}
 
 }
-
-// die Initialisierung muss hier drin geschehen, da ich die Position brauche!!
-// Anfagnsorientierung, wie bestimme ich diese, muss ja wissen wo mein NED hinzeigt (Aus Accelerometer und Magnetometerwert grob bestimmen wie 
-// oben in den Update schritten, einmal 10 Measurements den Durchschnitt nehmen fuer eine Halbwegs gute Initialisierung
 
 /// <summary>
 /// Method for the Measurement Update of the navigational Object state with the GPS 
@@ -411,7 +364,7 @@ void ExtendedKalmanFilter::updateGPS(Eigen::Vector3d gpsMeas, double dt, Eigen::
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "GPS IMU\n";
+		//	std::cout << "GPS IMU\n";
 	}
 
 }
@@ -526,7 +479,7 @@ void VIMUExtendedKalmanFilter::predictionStep(std::vector<Eigen::Vector3d> gyroM
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "GYRO\n";
+		//	std::cout << "GYRO\n";
 	}
 };
 
@@ -629,10 +582,6 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 		covariance = (Eigen::MatrixXd::Identity(19, 19) - K * H) * covariance;
 
 
-		/*
-		* Rechne ich nun so weiter oder kann ich das auch zu einem nichtlinearen Modell machen?
-		*/
-
 		// Orientation Correciton
 		Eigen::Vector3d p_dot_dot_hat = Eigen::Vector3d::Zero();
 
@@ -666,7 +615,7 @@ void VIMUExtendedKalmanFilter::updateAcc(std::vector<Eigen::Vector3d> accMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "ACC\n";
+		//	std::cout << "ACC\n";
 
 	}
 
@@ -729,12 +678,9 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 
 		// Magnet is in north direction, only x directed 
 
-		// Correction seems a bit of, mag_hat has to be in x-axis of the ned! But what does that mean for now?
 		mag_hat(0) = q_0 * q_0 + q_1 * q_1 - q_2 * q_2 - q_3 * q_3;
 		mag_hat(1) = 2 * q_1 * q_2 - 2 * q_0 * q_3;
 		mag_hat(2) = 2 * q_1 * q_3 + 2 * q_0 * q_2;
-
-		// where do i put the declination angle? ("Angle between magnetic and true north")
 
 
 		// MAG AVG over measurements
@@ -783,7 +729,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "MAG\n";
+		//	std::cout << "MAG\n";
 
 	}
 
@@ -791,7 +737,7 @@ void VIMUExtendedKalmanFilter::updateMag(std::vector<Eigen::Vector3d> magMeas, d
 void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, double dt, Eigen::Vector3d gpsVelocityInitial, Eigen::Quaternion<double> orientationInitial) {
 
 
-	if (!isInitialised()) { // evtl hier nochmal ueberarbeiten
+	if (!isInitialised()) {
 		if (!initSamplingFinished()) {
 			Eigen::VectorXd state;
 			if (initProcedureStart()) {
@@ -906,7 +852,7 @@ void VIMUExtendedKalmanFilter::updateGPS(std::vector<Eigen::Vector3d> gpsMeas, d
 
 		setState(state);
 		setCovariance(covariance);
-	//	std::cout << "GPS\n";
+		//	std::cout << "GPS\n";
 	}
 
 
@@ -1092,14 +1038,6 @@ Eigen::Quaternion<double> ExtendedKalmanFilterBase::computeInitOrientation(Eigen
 // sequence is ZYX -> Yaw, Pitch, Roll : Is it adaequat?? 1 of 12 possibilities
 // Quaternion & Rotation Sequences p.167
 Eigen::Quaternion<double> ExtendedKalmanFilterBase::computeOrientation(double yaw, double pitch, double roll) {
-	/*Eigen::Matrix3d roll = Eigen::Matrix3d::Zero();
-	roll << 1, 0, 0, 0, std::cos(roll), -std::sin(roll), 0, std::sin(roll), std::cos(roll);
-
-	Eigen::Matrix3d pitch = Eigen::Matrix3d::Zero();
-	pitch << std::cos(pitch), 0, std::sin(pitch), 0, 1, 0, -std::sin(pitch), 0, std::cos(pitch);
-
-	Eigen::Matrix3d yaw = Eigen::Matrix3d::Zero();
-	yaw << std::cos(yaw), -std::sin(yaw), 0, std::sin(yaw), std::cos(yaw), 0, 0, 0, 1;*/
 
 
 	double y_c = std::cos(yaw / 2);
@@ -1174,80 +1112,3 @@ bool ExtendedKalmanFilterBase::initProcedureStart() {
 	return true;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//F(0, 0) = 1;
-//F(0, 3) = dt;
-//F(0, 6)1. / 2 * dt * dt * x_dot;
-//F(1, 1) = 1;
-//F(1, 4) = dt;
-//F(1, 7) = 1. / 2 * dt * dt * y_dot_dot;
-//F(2, 2) = 1;
-//F(2, 5) = dt;
-//F(2, 8) = 1. / 2 * dt * dt * z_dot_dot;
-//
-//
-//
-//F(3, 3) = 1;
-//F(3, 6) = dt * x_dot_dot;
-//F(4, 4) = 1;
-//F(4, 7) = dt * y_dot_dot;
-//F(5, 5) = 1;
-//F(5, 8) = dt * z_dot_dot;
-//
-//
-//
-//F(6, 6) = x_dot_dot;
-//F(7, 7) = y_dot_dot;
-//F(8, 8) = z_dot_dot;
-//
-//
-//F(9, 9) = psi_x_dot;
-//F(10, 10) = psi_y_dot;
-//F(11, 11) = psi_z_dot;
-//
-//
-//
-//F(12, 12);
-//F(12, 13);
-//F(12, 14);
-//F(12, 15);
-//F(13, 12);
-//F(13, 13);
-//F(13, 14);
-//F(13, 15);
-//F(14, 12);
-//F(14, 13);
-//F(14, 14);
-//F(14, 15);
-//F(15, 12);
-//F(15, 13);
-//F(15, 14);
-//F(15, 15);
-//
-//F(16, 16);
-//F(17, 17);
-//F(18, 18);
-//
-//state = F * state;
-
-	//if (false) { // for velocity when added
-			//	state(3) = gpsVelocityInitial(0);
-			//	state(4) = gpsVelocityInitial(1); 
-			//	state(5) = gpsVelocityInitial(2);
-			//}
