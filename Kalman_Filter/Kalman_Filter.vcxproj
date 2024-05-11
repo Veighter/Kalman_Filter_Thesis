@@ -136,8 +136,6 @@
     <ClInclude Include="extendedkalmanfilter.h" />
     <ClInclude Include="coordTransformation.h" />
     <ClInclude Include="Fusion.h" />
-    <ClInclude Include="sensors.h" />
-    <ClInclude Include="vimuextendedkalmanfilter.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\..\..\Users\veigh\Desktop\Bachelor-Arbeit\Code\Datalogs Veit\Froemern Fahrt\18_4_2024\Konstrukt Daten\IMU_0_data.txt" />

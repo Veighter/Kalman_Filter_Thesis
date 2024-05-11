@@ -26,16 +26,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="sensors.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="extendedkalmanfilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="coordTransformation.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="vimuextendedkalmanfilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Configuration.h">

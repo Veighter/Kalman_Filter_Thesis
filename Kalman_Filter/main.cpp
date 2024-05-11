@@ -334,7 +334,7 @@ void validateIMUData(CM_INS& centralized_ins, FusionInit fusion_init, std::strin
 
 void multiple_imu_fusion_raw(CM_INS& centralized_ins, std::string file_appendix) {
 
-	int row_imu = 1; // wie kann man das noch eleganter loesen, auch wegen unten den Zeiten etc.
+	int row_imu = 1; 
 	std::ofstream state_writer{};
 	std::string path_time, path_position, path_orientation;
 	Eigen::VectorXd state;
@@ -1001,6 +1001,7 @@ void fuse(Configuration& configuration) {
 
 	init_local_INS(configuration.getOrientations());
 
+	// Multi-IMU
 //	cm_INS.inss[0] = &ins_1;
 //	cm_INS.inss[1] = &ins_2;
 	//cm_INS.inss[2] = &ins_3;
